@@ -1,40 +1,61 @@
-import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
-import yahooFinance from "npm:yahoo-finance2";
+// @ts-nocheck
+// deno-lint-ignore-file
+
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
+};
+
+async function yahooSearch(query: string) {
+  const url = `https://query1.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(
+    query
+  )}&quotesCount=20&newsCount=0`;
+  const resp = await fetch(url);
+
+  if (!resp.ok) {
+    throw new Error(`Yahoo search failed with status ${resp.status}`);
+  }
+
+  const data = await resp.json();
+  // We mostly care about data.quotes; pass the whole object through
+  return data;
 }
 
 serve(async (req) => {
   // Handle CORS preflight request
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders })
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: corsHeaders });
   }
 
   try {
-    const { query } = await req.json();
+    const body = await req.json().catch(() => ({}));
+    const query = body.query as string | undefined;
 
-    if (!query) {
+    if (!query || !query.trim()) {
       // Return an empty array if the query is empty
       return new Response(JSON.stringify({ quotes: [] }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
         status: 200,
       });
     }
 
-    // Use the powerful search function from the library
-    const searchResults = await yahooFinance.search(query, { newsCount: 0 }); // We don't need news results
+    const searchResults = await yahooSearch(query.trim());
 
     return new Response(JSON.stringify(searchResults), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 200,
     });
-
   } catch (error) {
-    return new Response(JSON.stringify({ error: error.message }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      status: 500,
-    });
+    console.error("search-assets error", error);
+    return new Response(
+      JSON.stringify({ error: (error as Error).message ?? String(error) }),
+      {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 500,
+      }
+    );
   }
-})
+});
