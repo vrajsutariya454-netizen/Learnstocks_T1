@@ -255,17 +255,14 @@ const HoldingsPage = () => {
                 try {
                   const combined = { ...(prices || {}), ...(fetched || {}) };
                   const portfolio = usePortfolioStore.getState();
-                  const balanceNow = useBalanceStore.getState().balance;
-                  const totalValue =
-                    balanceNow +
-                    portfolio.holdings.reduce((s, h) => {
-                      const p =
-                        combined[h.symbol]?.price ??
-                        mockStocks.find((m) => m.id === h.stockId)?.price ??
-                        h.avgBuyPrice;
-                      return s + h.quantity * p;
-                    }, 0);
-                  usePortfolioStore.getState().addHistoryPoint(totalValue);
+                  const investedValue = portfolio.holdings.reduce((s, h) => {
+                    const p =
+                      combined[h.symbol]?.price ??
+                      mockStocks.find((m) => m.id === h.stockId)?.price ??
+                      h.avgBuyPrice;
+                    return s + h.quantity * p;
+                  }, 0);
+                  usePortfolioStore.getState().addHistoryPoint(investedValue);
                 } catch (err) {
                   console.error(
                     "Failed to append history point after sell",
