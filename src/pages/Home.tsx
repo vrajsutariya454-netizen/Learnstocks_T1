@@ -76,14 +76,9 @@ const Home = () => {
       if (data) {
         const remotePoints = data.points || 0;
         setUserPoints(remotePoints);
-
-        // Initialize local cash balance from remote points once per user
-        const initKey = `balance_initialized_${user.id}`;
-        const alreadyInit = localStorage.getItem(initKey);
-        if (!alreadyInit) {
-          setBalance(remotePoints);
-          localStorage.setItem(initKey, "1");
-        }
+        // Always sync local cash balance from remote points so
+        // every device reflects the latest balance for this user.
+        setBalance(remotePoints);
 
         setLastLoginDate(data.last_login_date);
         setIsFirstLogin(!data.profile_completed);
@@ -121,13 +116,9 @@ const Home = () => {
             if (payload.new && payload.new.points !== undefined) {
               const updatedPoints = payload.new.points || 0;
               setUserPoints(updatedPoints);
-              // Only update local balance from remote changes if balance wasn't initialized locally
-              const initKey = `balance_initialized_${user.id}`;
-              const alreadyInit = localStorage.getItem(initKey);
-              if (!alreadyInit) {
-                setBalance(updatedPoints);
-                localStorage.setItem(initKey, "1");
-              }
+              // Mirror any remote points change (quizzes, login rewards,
+              // challenges, or trades) into the local cash balance.
+              setBalance(updatedPoints);
             }
           }
         )
