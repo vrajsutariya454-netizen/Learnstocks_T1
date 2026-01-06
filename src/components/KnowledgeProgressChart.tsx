@@ -42,37 +42,73 @@ const MarketKnowledgeProgressChart: React.FC<KnowledgeProgressChartProps> = ({
 }) => {
   const hasData = data && data.length > 0;
 
-  const chartData = React.useMemo(
-    () =>
-      (data || []).map((point, index) => {
-        const date = new Date(point.snapshot_date);
-        const label = isNaN(date.getTime())
-          ? point.snapshot_date
-          : date.toLocaleDateString(undefined, {
-              month: "short",
-              day: "numeric",
-            });
+  const chartData = React.useMemo(() => {
+    // Group points by snapshot_date (YYYY-MM-DD) and sum activityScore per day.
+    const groups: Record<
+      string,
+      {
+        dateLabel: string;
+        sumScore: number; // aggregated activityScore for the day
+        count: number; // number of quizzes/challenges that day
+        gameLabels: string[];
+        outcomes: string[];
+      }
+    > = {};
 
-        const gameLabel =
-          point.gameType === "quiz"
-            ? `Quiz: ${
-                (point.activityMetadata?.title as string) || point.gameId
-              }`
-            : `Challenge: ${
-                (point.activityMetadata?.symbol as string) || point.gameId
-              }`;
+    (data || []).forEach((point) => {
+      const dateKey = (point.snapshot_date || "").slice(0, 10);
+      const date = new Date(point.snapshot_date);
+      const label = isNaN(date.getTime())
+        ? point.snapshot_date
+        : date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+
+      const gameLabel =
+        point.gameType === "quiz"
+          ? `Quiz: ${(point.activityMetadata?.title as string) || point.gameId}`
+          : `Challenge: ${(point.activityMetadata?.symbol as string) || point.gameId}`;
+
+      if (!groups[dateKey]) {
+        groups[dateKey] = {
+          dateLabel: label,
+          sumScore: 0,
+          count: 0,
+          gameLabels: [],
+          outcomes: [],
+        };
+      }
+
+      groups[dateKey].sumScore += Number(point.activityScore || 0);
+      groups[dateKey].count += 1;
+      if (gameLabel) groups[dateKey].gameLabels.push(gameLabel);
+      if (point.outcome) groups[dateKey].outcomes.push(point.outcome);
+    });
+
+    // Convert groups back to an ordered array (preserve original chronological order by date)
+    const ordered = Object.keys(groups)
+      .sort()
+      .map((key, index) => {
+        const g = groups[key];
+        const maxPossible = g.count * 100;
+        // Percentage normalization: (sum / (100 * count)) * 100 => sum / count
+        const normalized = g.count > 0 ? g.sumScore / g.count : 0;
+        const capped = Math.min(100, normalized);
 
         return {
           index,
-          dateLabel: label,
-          knowledgeScore: point.knowledge_score,
-          gameLabel,
-          rawScore: point.activityScore,
-          outcome: point.outcome,
+          dateLabel: g.dateLabel,
+          // value shown on chart: normalized and capped to 100
+          knowledgeScore: capped,
+          // raw totals for tooltip/context
+          rawScore: g.sumScore,
+          count: g.count,
+          maxPossible,
+          gameLabel: g.gameLabels.join(" · "),
+          outcome: g.outcomes[g.outcomes.length - 1] || undefined,
         };
-      }),
-    [data]
-  );
+      });
+
+    return ordered;
+  }, [data]);
 
   const chartConfig = {
     knowledgeScore: {
@@ -156,16 +192,20 @@ const MarketKnowledgeProgressChart: React.FC<KnowledgeProgressChartProps> = ({
                           ? "Declined"
                           : "Completed";
 
+                      const normalized = Number(value);
+                      const raw = Number(p.rawScore || 0);
+                      const maxPossible = Number(p.maxPossible || 100);
+
                       return (
                         <div className="flex flex-col items-end gap-0.5">
                           <span className="text-xs text-muted-foreground">
                             {outcomeLabel}
                           </span>
                           <span className="font-mono font-medium">
-                            {Number(value).toFixed(1)} / 100
+                            {normalized.toFixed(1)} / 100
                           </span>
                           <span className="text-[10px] text-muted-foreground">
-                            Game score: {Number(p.rawScore).toFixed(1)} / 100
+                            Combined: {raw.toFixed(1)} / {maxPossible}
                           </span>
                         </div>
                       );
