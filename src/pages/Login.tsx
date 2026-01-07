@@ -147,6 +147,29 @@ const Login = () => {
     setShowPassword(!showPassword);
   };
 
+  const handleGoogleLogin = async () => {
+    setIsLoading(true);
+
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          redirectTo: window.location.origin,
+        },
+      });
+
+      if (error) throw error;
+
+      // Supabase will redirect to Google and then back to the app.
+      // After redirect, AuthContext will pick up the new session
+      // and route the user appropriately.
+    } catch (error: any) {
+      console.error("Google login error:", error);
+      toast.error(error.message || "Failed to sign in with Google");
+      setIsLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-learngreen-50 px-4">
       <div className="w-full max-w-md">
@@ -317,6 +340,15 @@ const Login = () => {
             </Tabs>
           </CardContent>
           <CardFooter className="flex flex-col space-y-4">
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full flex items-center justify-center"
+              onClick={handleGoogleLogin}
+              disabled={isLoading}
+            >
+              Continue with Google
+            </Button>
             <div className="text-sm text-gray-500 text-center">
               By continuing, you agree to LearnStocks'
               <Link
