@@ -1,43 +1,71 @@
-export const maxDuration = 30
+export const maxDuration = 30;
+
+const CORS_HEADERS: HeadersInit = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization",
+};
+
+export async function OPTIONS() {
+  return new Response(null, { status: 204, headers: CORS_HEADERS });
+}
 
 interface Message {
-  role: "user" | "assistant"
-  content: string
+  role: "user" | "assistant";
+  content: string;
 }
 
 export async function POST(req: Request) {
   try {
-    const { messages }: { messages: Message[] } = await req.json()
+    const { messages }: { messages: Message[] } = await req.json();
 
-    const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model: "llama-3.3-70b-versatile",
-        messages: messages,
-        max_tokens: 2000,
-        temperature: 0.7,
-        stream: false,
-      }),
-    })
+    const response = await fetch(
+      "https://api.groq.com/openai/v1/chat/completions",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
+        },
+        body: JSON.stringify({
+          model: "llama-3.3-70b-versatile",
+          messages: messages,
+          max_tokens: 2000,
+          temperature: 0.7,
+          stream: false,
+        }),
+      }
+    );
 
     if (!response.ok) {
-      const error = await response.text()
-      console.error("[v0] Groq API Error:", error)
-      return Response.json({ error: "Failed to generate response" }, { status: 500 })
+      const error = await response.text();
+      console.error("[v0] Groq API Error:", error);
+      return new Response(
+        JSON.stringify({ error: "Failed to generate response" }),
+        {
+          status: 500,
+          headers: { "Content-Type": "application/json", ...CORS_HEADERS },
+        }
+      );
     }
 
-    const data = await response.json()
-    console.log("[v0] Groq API Response received successfully")
+    const data = await response.json();
+    console.log("[v0] Groq API Response received successfully");
 
-    const text = data.choices?.[0]?.message?.content || ""
+    const text = data.choices?.[0]?.message?.content || "";
 
-    return Response.json({ text })
+    return new Response(JSON.stringify({ text }), {
+      status: 200,
+      headers: { "Content-Type": "application/json", ...CORS_HEADERS },
+    });
   } catch (error) {
-    console.error("[v0] API Error:", error)
-    return Response.json({ error: "Failed to generate response" }, { status: 500 })
+    console.error("[v0] API Error:", error);
+    return new Response(
+      JSON.stringify({ error: "Failed to generate response" }),
+      {
+        status: 500,
+        headers: { "Content-Type": "application/json", ...CORS_HEADERS },
+      }
+    );
   }
 }
