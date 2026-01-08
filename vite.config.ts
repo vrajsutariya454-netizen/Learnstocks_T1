@@ -16,5 +16,16 @@ export default defineConfig(({ mode }) => ({
   server: {
     host: "::",
     port: 8080,
+    proxy: {
+      // Proxy requests starting with /advisor-api to the investment-advisor app
+      // This avoids CORS during local development. The frontend should call
+      // `/advisor-api/api/chat` which will be forwarded to http://localhost:3000/api/chat
+      "/advisor-api": {
+        target: "http://localhost:3000",
+        changeOrigin: true,
+        secure: false,
+        rewrite: (path) => path.replace(/^\/advisor-api/, ""),
+      },
+    },
   },
 }))
