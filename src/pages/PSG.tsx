@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useAuth } from "@/contexts/AuthContext";
 import { UserProfile, StockSuggestion } from '@/types';
@@ -10,6 +9,13 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Sparkles,
   RefreshCw,
@@ -74,6 +80,7 @@ const PSG = () => {
   // -- Suggestions State
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [suggestions, setSuggestions] = useState<StockSuggestion[]>([]);
+  const [marketPref, setMarketPref] = useState<"Global" | "US" | "India">("Global"); // Market Preference
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
@@ -85,6 +92,41 @@ const PSG = () => {
   // -- Hooks
   const portfolioHoldings = usePortfolioStore(s => s.holdings);
   const { fetchPrices } = useLivePrices([], 0); // Manual fetch only
+
+  // ---------------------------------------------
+  // 1. Suggestions Logic (Existing)
+  // ---------------------------------------------
+  // Helper to update prices
+  const updateSuggestionsWithLivePrices = async (initialSuggestions: StockSuggestion[]) => {
+    if (initialSuggestions.length === 0) return initialSuggestions;
+
+    try {
+      const symbolsToFetch = initialSuggestions.map(s => {
+        // Heuristic: If it looks like an Indian stock (from our known list or marketPref) and no suffix, add .NS
+        const isIndian = s.symbol.length > 5 || ["TCS", "ITC", "SBIN", "LT", "INFY"].includes(s.symbol) || marketPref === "India";
+        return isIndian && !s.symbol.includes(".") ? `${s.symbol}.NS` : s.symbol;
+      });
+
+      const priceMap = await fetchPrices(symbolsToFetch);
+
+      return initialSuggestions.map(s => {
+        const lookupSymbol = s.symbol.length > 5 || ["TCS", "ITC", "SBIN", "LT", "INFY"].includes(s.symbol) || marketPref === "India" ? `${s.symbol}.NS` : s.symbol;
+        const liveData = priceMap[lookupSymbol] || priceMap[s.symbol];
+
+        if (liveData) {
+          return {
+            ...s,
+            currentPrice: liveData.price,
+            reason: liveData.changePercent ? `${s.reason} (Day: ${liveData.changePercent > 0 ? '+' : ''}${liveData.changePercent.toFixed(2)}%)` : s.reason
+          };
+        }
+        return s;
+      });
+    } catch (e) {
+      console.error("Failed to fetch live prices for suggestions", e);
+      return initialSuggestions;
+    }
+  };
 
   // ---------------------------------------------
   // 1. Suggestions Logic (Existing)
@@ -121,7 +163,13 @@ const PSG = () => {
       };
 
       setProfile(userProfile);
-      setSuggestions(getPersonalizedSuggestions(userProfile).slice(0, 6));
+
+      // Get suggestions (with market preference)
+      const content = getPersonalizedSuggestions(userProfile, marketPref).slice(0, 6);
+
+      // Fetch Live Prices
+      const liveContent = await updateSuggestionsWithLivePrices(content);
+      setSuggestions(liveContent);
 
     } catch (error) {
       console.error("Error in loadData:", error);
@@ -134,13 +182,15 @@ const PSG = () => {
 
   useEffect(() => {
     if (user) loadData(user.id);
-  }, [user]);
+  }, [user, marketPref]);
 
-  const handleRefreshSuggestions = () => {
+  const handleRefreshSuggestions = async () => {
     if (user && profile) {
       setIsRefreshing(true);
-      setSuggestions(getPersonalizedSuggestions(profile).slice(0, 6));
-      setTimeout(() => setIsRefreshing(false), 500);
+      const content = getPersonalizedSuggestions(profile, marketPref).slice(0, 6);
+      const liveContent = await updateSuggestionsWithLivePrices(content);
+      setSuggestions(liveContent);
+      setIsRefreshing(false);
       toast.success("Market data refreshed");
     }
   };
@@ -287,13 +337,27 @@ const PSG = () => {
 
           {/* TAB 1: SUGGESTIONS */}
           <TabsContent value="suggestions" className="space-y-6">
-            <div className="flex justify-between items-center mb-4">
+            <div className="flex flex-col md:flex-row justify-between items-center mb-4 gap-4">
               <p className="text-sm text-gray-500">
-                Based on your <strong>{profile?.riskTolerance}</strong> profile.
+                Based on your <strong>{profile?.riskTolerance}</strong> profile ({marketPref}).
               </p>
-              <Button variant="outline" size="sm" onClick={handleRefreshSuggestions} disabled={isRefreshing}>
-                <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} /> Refresh
-              </Button>
+
+              <div className="flex items-center gap-2">
+                <Select value={marketPref} onValueChange={(v: any) => setMarketPref(v)}>
+                  <SelectTrigger className="w-[140px]">
+                    <SelectValue placeholder="Market" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Global">Global</SelectItem>
+                    <SelectItem value="India">India (NSE)</SelectItem>
+                    <SelectItem value="US">US Market</SelectItem>
+                  </SelectContent>
+                </Select>
+
+                <Button variant="outline" size="sm" onClick={handleRefreshSuggestions} disabled={isRefreshing}>
+                  <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} /> Refresh
+                </Button>
+              </div>
             </div>
 
             {suggestions.length > 0 ? (
@@ -309,7 +373,9 @@ const PSG = () => {
                           <CardDescription>{s.name}</CardDescription>
                         </div>
                         <div className="text-right">
-                          <div className="font-bold text-lg">${s.currentPrice.toFixed(2)}</div>
+                          <div className="font-bold text-lg">
+                            {marketPref === "India" ? "₹" : "$"}{s.currentPrice.toFixed(2)}
+                          </div>
                           <div className={`text-xs font-bold ${s.potentialGain && s.potentialGain > 0 ? 'text-green-600' : 'text-red-600'}`}>
                             {s.potentialGain ? `+${(s.potentialGain * 100).toFixed(1)}%` : "0%"} Est.
                           </div>
@@ -322,14 +388,12 @@ const PSG = () => {
                       </p>
                       <div className="space-y-1">
                         <div className="flex justify-between text-xs text-gray-500">
-                          <span>Match</span><span>{s.score}/100</span>
+                          <span>Match</span><span>{Math.min(s.score, 100)}/100</span>
                         </div>
-                        <Progress value={s.score} className="h-2" />
+                        <Progress value={Math.min(s.score, 100)} className="h-2" />
                       </div>
                     </CardContent>
-                    <CardFooter>
-                      <Button className="w-full bg-learngreen-600 hover:bg-learngreen-700">Trade This</Button>
-                    </CardFooter>
+
                   </Card>
                 ))}
               </div>

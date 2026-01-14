@@ -448,14 +448,24 @@ def generate_quiz(req: QuizRequest):
         from groq import Groq
         client = Groq(api_key=api_key)
         
-        system_prompt = f"""You are a financial education assistant. Generate 5 multiple-choice questions about '{req.topic}' at '{req.difficulty}' difficulty level.
-Return strictly a JSON array of objects (no markdown). Each object must have:
-- id: unique string
-- text: question text
-- options: array of 4 strings
-- correctOption: index (0-3)
-- explanation: brief string
-- difficulty: string
+        system_prompt = f"""You are a financial education assistant. Generate 9 multiple-choice questions about '{req.topic}' to create an adaptive quiz.
+Generate exactly:
+- 3 questions of 'Easy' difficulty
+- 3 questions of 'Medium' difficulty
+- 3 questions of 'Hard' difficulty
+
+Return strictly a JSON array of objects (no markdown code blocks, just raw JSON). 
+Each object MUST have the following fields, especially 'difficulty':
+{{
+  "id": "q1",
+  "text": "Question text here?",
+  "options": ["Option A", "Option B", "Option C", "Option D"],
+  "correctOption": 0,
+  "explanation": "Brief explanation.",
+  "difficulty": "Easy" 
+}}
+
+Allowed values for 'difficulty': "Easy", "Medium", "Hard".
 """
         chat_completion = client.chat.completions.create(
             messages=[
@@ -474,6 +484,17 @@ Return strictly a JSON array of objects (no markdown). Each object must have:
             # Clean potential markdown
             content = content.replace("```json", "").replace("```", "").strip()
             questions = json.loads(content)
+            # Ensure we have a list
+            if not isinstance(questions, list):
+                 raise ValueError("AI did not return a list")
+            
+            # DEBUG LOGGING FOR DIFFICULTY
+            diff_counts = {}
+            for q in questions:
+                d = q.get("difficulty", "Unknown")
+                diff_counts[d] = diff_counts.get(d, 0) + 1
+            log(f"DEBUG: Generated question difficulties: {diff_counts}")
+
             return {"questions": questions}
         except Exception as e:
             log(f"JSON Parse Error: {e}")

@@ -135,3 +135,71 @@ export const FALLBACK_QUESTIONS_TECHNICAL: QuizQuestion[] = [
         difficulty: "Easy"
     }
 ];
+
+export const FALLBACK_QUESTIONS_NEWS: QuizQuestion[] = [
+    {
+        id: "fn-1",
+        text: "Which event typically causes immediate high volatility in a stock's price?",
+        options: [
+            "Quarterly Earnings Report",
+            "CEO going on vacation",
+            "Office renovation",
+            "Employee picnic"
+        ],
+        correctOption: 0,
+        explanation: "Earnings reports release crucial financial data that re-evaluates a company's worth, often causing sharp price movements.",
+        difficulty: "Easy"
+    },
+    {
+        id: "fn-2",
+        text: "What is 'Insider Trading'?",
+        options: [
+            "Trading stocks inside the office",
+            "Trading based on non-public, material information",
+            "Day trading from home",
+            "Buying stocks of the company you work for legally"
+        ],
+        correctOption: 1,
+        explanation: "Insider trading involves trading a public company's stock by someone who has non-public, material information about that stock, which is illegal.",
+        difficulty: "Medium"
+    },
+    {
+        id: "fn-3",
+        text: "A 'Stock Split' news usually results in:",
+        options: [
+            "Decrease in liquidity",
+            "Increase in share price",
+            "Decrease in share price but same market cap",
+            "Company bankruptcy"
+        ],
+        correctOption: 2,
+        explanation: "A stock split divides existing shares into multiple new shares, lowering the individual share price but keeping the total market value the same.",
+        difficulty: "Easy"
+    },
+    {
+        id: "fn-4",
+        text: "Which interest rate announcement is most watched globally?",
+        options: [
+            "RBI Repo Rate",
+            "US Federal Reserve (Fed) Funds Rate",
+            "European Central Bank Rate",
+            "Bank of Japan Rate"
+        ],
+        correctOption: 1,
+        explanation: "The US Fed Funds Rate affects global capital flows and valuation, making it the most watched.",
+        difficulty: "Difficult"
+    },
+    {
+        id: "fn-5",
+        text: "What does 'Guidance' mean in market news?",
+        options: [
+            "Advice from a financial advisor",
+            "A company's own prediction of near-future performance",
+            "A GPS map for the office",
+            "Instructions on how to trade"
+        ],
+        correctOption: 1,
+        explanation: "Guidance is a company's official expectation of its own future financial results, usually given during earnings calls.",
+        difficulty: "Medium"
+    }
+];

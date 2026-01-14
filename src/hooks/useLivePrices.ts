@@ -16,7 +16,9 @@ export function useLivePrices(initialSymbols: string[] = [], intervalMs = 5000) 
 
   const fetchPrices = useCallback(async (symbols?: string[]) => {
     const toFetchRaw = symbols || symbolsRef.current || [];
-    const toFetch = toFetchRaw.map((s) => (s.includes(".NS") ? s : `${s}.NS`));
+    // Smarter logic: If it has a dot or is a known US ticker, don't append .NS.
+    const usTickers = ["AAPL", "MSFT", "NVDA", "GOOGL", "AMZN", "TSLA", "META", "AMD", "NFLX", "INTC", "PYPL", "ADBE", "CSCO", "PEP", "AVGO", "TXN", "TMUS", "QCOM", "COST", "SBUX", "GILD", "INTU", "MDLZ", "FISV", "ADP", "ISRG", "REGN", "VRTX", "CSX", "BIIB", "AMGN", "ADI", "ILMN", "LRCX", "MU", "ATVI", "MELI", "MNST", "KDP", "MAR", "CTAS", "ORLY", "SNPS", "PCAR", "CDNS", "ALGN", "AEP", "SGEN", "ZS", "FTNT", "VRSK", "PAYX", "ODFL", "CHTR", "FAST", "IDXX", "ROST", "EXC", "LULU", "CPRT", "XEL", "DLTR", "CTSH", "WBA", "DXCM", "SIRI", "VRSN", "ANSS", "CDW", "BKR", "MTCH", "CERN", "SWKS", "PTHF", "CHKP", "TCOM", "ALNX", "NTRS", "SPLK", "OKTA", "DOCU", "NTAP", "INCY", "V", "JPM", "BAC", "WFC", "C", "GS", "MS", "DIS", "BA", "CAT", "MMM", "CVX", "XOM", "KO", "PEP", "WMT", "TGT", "PG", "JNJ", "PFE", "MRK", "ABBV", "UNH", "LLY", "NKE"];
+    const toFetch = toFetchRaw.map((s) => (s.includes(".") || usTickers.includes(s) || s.includes("-") ? s : `${s}.NS`));
     if (toFetch.length === 0) return {} as Record<string, PriceInfo>;
 
     try {

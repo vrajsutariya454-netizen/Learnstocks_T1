@@ -2,10 +2,15 @@
 import { UserProfile, StockSuggestion } from "@/types";
 import { STOCK_DATA, StockMetadata } from "@/data/stockData";
 
-export const getPersonalizedSuggestions = (profile: UserProfile): StockSuggestion[] => {
+export const getPersonalizedSuggestions = (profile: UserProfile, marketPreference: "Global" | "US" | "India" = "Global"): StockSuggestion[] => {
     if (!profile) return [];
 
-    const scoredStocks = STOCK_DATA.map((stock) => {
+    let filteredStocks = STOCK_DATA;
+    if (marketPreference !== "Global") {
+        filteredStocks = STOCK_DATA.filter(s => s.market === marketPreference);
+    }
+
+    const scoredStocks = filteredStocks.map((stock) => {
         let score = 0;
         const reasons: string[] = [];
 
@@ -122,7 +127,7 @@ export const getPersonalizedSuggestions = (profile: UserProfile): StockSuggestio
             reason: mainReason,
             riskLevel: stock.riskLevel,
             potentialGain: potentialGain,
-            score: score,
+            score: Math.min(score, 100),
             reasonings: reasons
         } as StockSuggestion;
     });
