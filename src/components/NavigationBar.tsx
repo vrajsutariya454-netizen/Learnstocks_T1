@@ -9,7 +9,7 @@ import MainMenu from "./MainMenu";
 const NavigationBar = () => {
   const location = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  
+
   const navigation = [
     { name: "Home", href: "/home", icon: Home, current: location.pathname === "/home" },
     { name: "Profile", href: "/profile", icon: User, current: location.pathname === "/profile" },
@@ -17,10 +17,10 @@ const NavigationBar = () => {
     { name: "Games", href: "/games", icon: GamepadIcon, current: location.pathname === "/games" },
     { name: "Predictions", href: "/predictions", icon: TrendingUp, current: location.pathname === "/predictions" },
     { name: "PSG", href: "/psg", icon: BarChart, current: location.pathname === "/psg" },
-    { 
-      name: "More", 
-      href: "/more", 
-      icon: ChevronDown, 
+    {
+      name: "More",
+      href: "/more",
+      icon: ChevronDown,
       current: ["/more", "/diversification", "/learning"].includes(location.pathname),
       subItems: [
         { name: "Portfolio Diversification", href: "/diversification", icon: PieChart },
@@ -35,8 +35,13 @@ const NavigationBar = () => {
       <div className="flex flex-wrap justify-between items-center">
         <div className="flex items-center">
           <MainMenu />
+          {window.location.hostname === "localhost" && (
+            <span className="ml-2 px-2 py-0.5 rounded bg-yellow-100 text-yellow-800 text-xs font-bold border border-yellow-200">
+              DEV
+            </span>
+          )}
         </div>
-        
+
         <div className="flex md:hidden">
           <Button
             variant="ghost"
@@ -49,7 +54,7 @@ const NavigationBar = () => {
             </svg>
           </Button>
         </div>
-        
+
         <div className={cn("w-full md:block md:w-auto", mobileMenuOpen ? "block" : "hidden")}>
           <ul className="flex flex-col mt-4 md:flex-row md:space-x-8 md:mt-0 md:font-medium">
             {navigation.map((item) => (
@@ -71,7 +76,7 @@ const NavigationBar = () => {
             ))}
           </ul>
         </div>
-        
+
         <div className="hidden md:flex items-center">
           <Link to="/profile">
             <Button variant="ghost" size="sm" className="text-learngreen-500">

@@ -14,7 +14,7 @@ export default defineConfig(({ mode }) => ({
     },
   },
   server: {
-    host: "::",
+    host: "0.0.0.0",
     port: 8080,
     proxy: {
       // Proxy requests starting with /advisor-api to the investment-advisor app
@@ -25,6 +25,12 @@ export default defineConfig(({ mode }) => ({
         changeOrigin: true,
         secure: false,
         rewrite: (path) => path.replace(/^\/advisor-api/, ""),
+      },
+      "/py-api": {
+        target: "http://localhost:8000",
+        changeOrigin: true,
+        secure: false,
+        rewrite: (path) => path.replace(/^\/py-api/, ""),
       },
     },
   },
