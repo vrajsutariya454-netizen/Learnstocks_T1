@@ -443,6 +443,10 @@ const Games = () => {
         type: "REWARD",
         created_at: new Date().toISOString(),
       } as any);
+
+      // Keep profile.points (and thus Home cash) in sync with
+      // the updated local balance by incrementing points as well.
+      await supabase.rpc("increment_points", { amount: earnedPoints });
     } catch (err) {
       console.error("Failed to log points", err);
     }

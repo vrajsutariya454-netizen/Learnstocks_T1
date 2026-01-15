@@ -189,31 +189,6 @@ export const usePortfolioStore = create<PortfolioState>()(
             await supabase.auth.getUser();
           if (userError || !userData?.user) return;
           const userId = userData.user.id;
-
-          // Helper: push the latest local cash balance into the profile's
-          // `points` field so that new devices start from the correct
-          // cash amount for this user.
-          async function syncCashBalanceToProfile() {
-            try {
-              const { data: userData, error: userError } =
-                await supabase.auth.getUser();
-              if (userError || !userData?.user) return;
-              const userId = userData.user.id;
-
-              const balance = useBalanceStore.getState().balance;
-
-              const { error } = await supabase
-                .from("profiles")
-                .update({ points: balance })
-                .eq("id", userId);
-
-              if (error) {
-                console.error("Failed to sync cash balance to profile", error);
-              }
-            } catch (err) {
-              console.error("Error syncing cash balance to profile", err);
-            }
-          }
           const { data, error } = await supabase
             .from("holdings")
             .select("stock_symbol, quantity, average_buy_price")
@@ -359,5 +334,28 @@ async function syncHoldingAndTransaction(params: {
     }
   } catch (err) {
     console.error("Error syncing portfolio to Supabase", err);
+  }
+}
+
+// Push the latest local cash balance into the profile's `points` field
+// so that Home and other sessions reflect the same virtual cash.
+async function syncCashBalanceToProfile() {
+  try {
+    const { data: userData, error: userError } = await supabase.auth.getUser();
+    if (userError || !userData?.user) return;
+    const userId = userData.user.id;
+
+    const balance = useBalanceStore.getState().balance;
+
+    const { error } = await supabase
+      .from("profiles")
+      .update({ points: balance })
+      .eq("id", userId);
+
+    if (error) {
+      console.error("Failed to sync cash balance to profile", error);
+    }
+  } catch (err) {
+    console.error("Error syncing cash balance to profile", err);
   }
 }
