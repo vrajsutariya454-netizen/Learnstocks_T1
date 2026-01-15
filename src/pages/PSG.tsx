@@ -192,9 +192,13 @@ const PSG = () => {
       const base = (import.meta as any).env?.VITE_PY_API_BASE_URL || "/py-api";
       const url = `${base.replace(/\/$/, "")}/analyze`;
 
+      const controller = new AbortController();
+      const timeoutId = window.setTimeout(() => controller.abort(), 25000); // 25s safety timeout
+
       const res = await fetch(url, {
         method: "POST",
         body: formData,
+        signal: controller.signal,
       });
 
       // Read body once and try to parse JSON; this avoids calling
@@ -227,8 +231,19 @@ const PSG = () => {
       toast.success("Portfolio analysis complete!");
     } catch (err: any) {
       console.error("Analysis Error:", err);
-      toast.error(`Analysis failed: ${err.message || String(err)}`);
+      const msg =
+        err?.name === "AbortError"
+          ? "Analyzer timed out. Please try again in a moment."
+          : err?.message || String(err);
+      toast.error(`Analysis failed: ${msg}`);
     } finally {
+      // Clear timeout and reset state
+      // (no-op if controller already aborted)
+      try {
+        if (typeof window !== "undefined") {
+          window.clearTimeout?.(timeoutId as any);
+        }
+      } catch {}
       setAnalyzing(false);
     }
   };
