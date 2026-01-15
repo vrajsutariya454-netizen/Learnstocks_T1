@@ -193,7 +193,8 @@ const PSG = () => {
       const url = `${base.replace(/\/$/, "")}/analyze`;
 
       const controller = new AbortController();
-      const timeoutId = window.setTimeout(() => controller.abort(), 25000); // 25s safety timeout
+      // Allow extra time for Render cold starts in production.
+      const timeoutId = window.setTimeout(() => controller.abort(), 55000); // ~55s safety timeout
 
       const res = await fetch(url, {
         method: "POST",
