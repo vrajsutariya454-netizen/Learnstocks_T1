@@ -24,9 +24,9 @@ const containerVariants = {
   show: {
     opacity: 1,
     transition: {
-      staggerChildren: 0.1
-    }
-  }
+      staggerChildren: 0.1,
+    },
+  },
 };
 
 const itemVariants = {
@@ -34,8 +34,8 @@ const itemVariants = {
   show: {
     opacity: 1,
     y: 0,
-    transition: { type: "spring", stiffness: 300, damping: 24 }
-  }
+    transition: { type: "spring", stiffness: 300, damping: 24 },
+  },
 } as const;
 
 const Home = () => {
@@ -56,7 +56,7 @@ const Home = () => {
   const [isSellDialogOpen, setIsSellDialogOpen] = useState(false);
   const [selectedHolding, setSelectedHolding] = useState<any | null>(null);
   const [selectedSellStock, setSelectedSellStock] = useState<Stock | null>(
-    null
+    null,
   );
   // Range selection for portfolio chart
   const [range, setRange] = useState<"1D" | "1W" | "1M" | "1Y">("1M");
@@ -140,7 +140,7 @@ const Home = () => {
               // challenges, or trades) into the local cash balance.
               setBalance(updatedPoints);
             }
-          }
+          },
         )
         .subscribe();
 
@@ -153,7 +153,7 @@ const Home = () => {
   // set symbols to fetch: holdings only (removed Trading section)
   useEffect(() => {
     const syms = Array.from(
-      new Set([...holdings.map((h) => `${h.symbol}.NS`)])
+      new Set([...holdings.map((h) => `${h.symbol}.NS`)]),
     );
     setSymbols(syms);
   }, [holdings]);
@@ -196,8 +196,8 @@ const Home = () => {
         const symbols = Array.from(
           new Set([
             ...state.trades.map((t) => t.symbol),
-            ...state.holdings.map((h) => h.symbol)
-          ])
+            ...state.holdings.map((h) => h.symbol),
+          ]),
         );
         if (symbols.length === 0) {
           setSeriesData([]);
@@ -213,10 +213,14 @@ const Home = () => {
             // Try fetching from API
             const { data, error } = await supabase.functions.invoke(
               "get-stock-data",
-              { body: { symbol: `${sym}.NS`, days } }
+              { body: { symbol: `${sym}.NS`, days } },
             );
 
-            if (!error && data?.historicalData && data.historicalData.length > 0) {
+            if (
+              !error &&
+              data?.historicalData &&
+              data.historicalData.length > 0
+            ) {
               hist = data.historicalData.map((it: any) => ({
                 date: new Date(it.date).toISOString().slice(0, 10),
                 close: it.close as number,
@@ -224,7 +228,8 @@ const Home = () => {
             } else {
               // FALLBACK: Generate synthetic history so the graph works
               // Start from current known price or mock price
-              const mockPrice = mockStocks.find(m => m.symbol === sym)?.price ?? 100;
+              const mockPrice =
+                mockStocks.find((m) => m.symbol === sym)?.price ?? 100;
               // Get live price if available, else mock
               // We access prices from closure (it is in component scope)
               let current = prices?.[sym]?.price ?? mockPrice;
@@ -237,11 +242,11 @@ const Home = () => {
                 d.setDate(end.getDate() - i);
                 synthPoints.push({
                   date: d.toISOString().slice(0, 10),
-                  close: current
+                  close: current,
                 });
                 // Random walk backwards: previous was current / (1 + change)
                 // Change is random +/- 2%
-                const change = (Math.random() * 0.04 - 0.02);
+                const change = Math.random() * 0.04 - 0.02;
                 current = current / (1 + change);
               }
               hist = synthPoints.reverse();
@@ -251,7 +256,7 @@ const Home = () => {
             hist.sort((a, b) => a.date.localeCompare(b.date));
             // forward-fill close for missing days will be handled later by last-known lookup
             return { sym, hist };
-          })
+          }),
         );
 
         // Build a sorted union of dates
@@ -295,7 +300,11 @@ const Home = () => {
         const currentCash = useBalanceStore.getState().balance;
 
         // Flatten trades for chronological replay
-        const allTrades = state.trades.slice().sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+        const allTrades = state.trades
+          .slice()
+          .sort(
+            (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime(),
+          );
 
         const series: { date: string; value: number }[] = [];
         for (const d of dates) {
@@ -307,7 +316,9 @@ const Home = () => {
 
             if (ts.length === 0) {
               // FALLBACK: If no trades recorded, use current holdings quantity (assume held constant)
-              const h = usePortfolioStore.getState().holdings.find(x => x.symbol === sym);
+              const h = usePortfolioStore
+                .getState()
+                .holdings.find((x) => x.symbol === sym);
               if (h) qty = h.quantity;
             } else {
               for (const tr of ts) {
@@ -339,26 +350,41 @@ const Home = () => {
 
       <LoginReward isFirstLogin={isFirstLogin} lastLoginDate={lastLoginDate} />
 
-      <motion.main variants={containerVariants} initial="hidden" animate="show" className="container mx-auto px-4 py-6">
+      <motion.main
+        variants={containerVariants}
+        initial="hidden"
+        animate="show"
+        className="container mx-auto px-4 py-6"
+      >
         {/* Portfolio Overview Allocation (green theme) */}
         {(() => {
-          const investedValue = holdings.reduce((s, h) => {
+          // "Current" stocks value based on live prices when available,
+          // otherwise mock price, otherwise average buy price.
+          const investedValueRaw = holdings.reduce((s, h) => {
             const live = prices[h.symbol];
             const currentPrice = live
               ? live.price
-              : mockStocks.find((m) => m.id === h.stockId)?.price ??
-              h.avgBuyPrice;
+              : (mockStocks.find((m) => m.id === h.stockId)?.price ??
+                h.avgBuyPrice);
             return s + h.quantity * currentPrice;
           }, 0);
+          // Pure cost basis (what the user actually invested)
+          const investedCost = holdings.reduce(
+            (s, h) => s + h.quantity * h.avgBuyPrice,
+            0,
+          );
+          // If we couldn't resolve any prices (live/mock) but there is a
+          // positive cost basis, fall back to cost as the "current" value
+          // so the card never misleadingly shows ₹0 when the user holds
+          // stocks but live prices are unavailable.
+          const investedValue =
+            investedValueRaw === 0 && investedCost > 0
+              ? investedCost
+              : investedValueRaw;
           const cashValue = balance;
           const total = investedValue + cashValue;
           const investedPct = total > 0 ? (investedValue / total) * 100 : 0;
           const cashPct = total > 0 ? (cashValue / total) * 100 : 0;
-          // P&L for stocks vs cost
-          const investedCost = holdings.reduce(
-            (s, h) => s + h.quantity * h.avgBuyPrice,
-            0
-          );
           const stocksPnL = investedValue - investedCost;
           const stocksPnLPct =
             investedCost > 0 ? (stocksPnL / investedCost) * 100 : 0;
@@ -367,7 +393,9 @@ const Home = () => {
               <Card className="mb-6">
                 <CardHeader className="flex flex-row items-start justify-between space-y-0">
                   <div>
-                    <CardTitle className="text-xl">Portfolio Overview</CardTitle>
+                    <CardTitle className="text-xl">
+                      Portfolio Overview
+                    </CardTitle>
                     <p className="text-sm text-gray-500">
                       Total value across cash and holdings
                     </p>
@@ -428,8 +456,11 @@ const Home = () => {
                           ₹{investedValue.toLocaleString()}
                         </div>
                         <div
-                          className={`text-sm font-semibold ${stocksPnL >= 0 ? "text-green-600" : "text-orange-500"
-                            }`}
+                          className={`text-sm font-semibold ${
+                            stocksPnL >= 0
+                              ? "text-green-600"
+                              : "text-orange-500"
+                          }`}
                         >
                           {stocksPnL >= 0 ? "+" : ""}₹
                           {Math.abs(stocksPnL).toLocaleString(undefined, {
@@ -486,15 +517,15 @@ const Home = () => {
                 const live = prices[h.symbol];
                 const currentPrice = live
                   ? live.price
-                  : mockStocks.find((m) => m.id === h.stockId)?.price ??
-                  h.avgBuyPrice;
+                  : (mockStocks.find((m) => m.id === h.stockId)?.price ??
+                    h.avgBuyPrice);
                 return s + h.quantity * currentPrice;
               }, 0);
 
               // Total cost basis of holdings
               const investedCost = holdings.reduce(
                 (s, h) => s + h.quantity * h.avgBuyPrice,
-                0
+                0,
               );
               const investedPnL = investedValue - investedCost;
               const investedPnLPct =
@@ -506,9 +537,9 @@ const Home = () => {
                   ? seriesData
                   : history && history.length > 0
                     ? history.map((pt) => ({
-                      date: new Date(pt.date).toLocaleTimeString(),
-                      value: pt.value,
-                    }))
+                        date: new Date(pt.date).toLocaleTimeString(),
+                        value: pt.value,
+                      }))
                     : undefined;
 
               return (
@@ -530,10 +561,11 @@ const Home = () => {
                     {(["1D", "1W", "1M", "1Y"] as const).map((r) => (
                       <button
                         key={r}
-                        className={`px-3 py-1 rounded-full border ${range === r
-                          ? "bg-learngreen-600 text-white"
-                          : "bg-white text-gray-700"
-                          }`}
+                        className={`px-3 py-1 rounded-full border ${
+                          range === r
+                            ? "bg-learngreen-600 text-white"
+                            : "bg-white text-gray-700"
+                        }`}
                         onClick={() => setRange(r)}
                         disabled={seriesLoading && range !== r}
                       >
@@ -565,10 +597,11 @@ const Home = () => {
                     <button
                       key={v.key}
                       aria-pressed={holdingsView === v.key}
-                      className={`px-3 py-1 rounded-full border ${holdingsView === (v.key as any)
-                        ? "bg-learngreen-600 text-white"
-                        : "bg-white text-gray-700"
-                        }`}
+                      className={`px-3 py-1 rounded-full border ${
+                        holdingsView === (v.key as any)
+                          ? "bg-learngreen-600 text-white"
+                          : "bg-white text-gray-700"
+                      }`}
                       onClick={() => setHoldingsView(v.key as any)}
                     >
                       {v.label}
@@ -585,7 +618,7 @@ const Home = () => {
                   {holdings.map((holding) => {
                     const live = prices[holding.symbol];
                     const mock = mockStocks.find(
-                      (m) => m.id === holding.stockId
+                      (m) => m.id === holding.stockId,
                     ) as Stock | undefined;
                     const currentPrice = live
                       ? live.price
@@ -593,9 +626,9 @@ const Home = () => {
                         ? mock.price
                         : holding.avgBuyPrice;
                     const currentChange = live
-                      ? live.change ?? 0
+                      ? (live.change ?? 0)
                       : mock
-                        ? mock.change ?? 0
+                        ? (mock.change ?? 0)
                         : 0;
                     const value = holding.quantity * currentPrice;
                     const pnl = value - holding.quantity * holding.avgBuyPrice;
@@ -604,7 +637,8 @@ const Home = () => {
                     const totalHoldingsValue = holdings.reduce((s, h) => {
                       const m = mockStocks.find((x) => x.id === h.stockId);
                       const price =
-                        prices[h.symbol]?.price ?? (m ? m.price : h.avgBuyPrice);
+                        prices[h.symbol]?.price ??
+                        (m ? m.price : h.avgBuyPrice);
                       return s + price * h.quantity;
                     }, 0);
                     const sharePercent =
@@ -677,10 +711,11 @@ const Home = () => {
                                   ₹{currentPrice.toFixed(2)}
                                 </div>
                                 <div
-                                  className={`text-sm ${currentChange >= 0
-                                    ? "text-green-600"
-                                    : "text-red-600"
-                                    }`}
+                                  className={`text-sm ${
+                                    currentChange >= 0
+                                      ? "text-green-600"
+                                      : "text-red-600"
+                                  }`}
                                 >
                                   {currentChange >= 0 ? "+" : ""}
                                   {currentChange.toFixed(2)} (
@@ -702,7 +737,8 @@ const Home = () => {
                               const symNs = `${holding.symbol}.NS`;
                               const fetched = await fetchPrices([symNs]);
                               const liveFetched =
-                                fetched[holding.symbol] || prices[holding.symbol];
+                                fetched[holding.symbol] ||
+                                prices[holding.symbol];
                               const priceToUse = liveFetched
                                 ? liveFetched.price
                                 : mock
@@ -713,7 +749,8 @@ const Home = () => {
                                 symbol: holding.symbol,
                                 name: holding.name,
                                 price: priceToUse,
-                                change: liveFetched?.change ?? mock?.change ?? 0,
+                                change:
+                                  liveFetched?.change ?? mock?.change ?? 0,
                                 changePercent:
                                   liveFetched?.changePercent ??
                                   mock?.changePercent ??
@@ -752,13 +789,14 @@ const Home = () => {
                   prices[selectedHolding.symbol];
                 const priceToUse = live
                   ? live.price
-                  : mockStocks.find((m) => m.id === selectedHolding.stockId)
-                    ?.price ?? selectedHolding.avgBuyPrice;
+                  : (mockStocks.find((m) => m.id === selectedHolding.stockId)
+                      ?.price ?? selectedHolding.avgBuyPrice);
                 const ok = sellStock(selectedHolding.stockId, qty, priceToUse);
                 if (ok)
                   toast.success(
-                    `Sold ${qty} ${selectedHolding.symbol
-                    } @ ₹${priceToUse.toFixed(2)}`
+                    `Sold ${qty} ${
+                      selectedHolding.symbol
+                    } @ ₹${priceToUse.toFixed(2)}`,
                   );
                 else toast.error("Sell failed: invalid qty");
                 // append a history snapshot after successful sell
@@ -777,7 +815,7 @@ const Home = () => {
                   } catch (err) {
                     console.error(
                       "Failed to append history point after sell",
-                      err
+                      err,
                     );
                   }
                 }
