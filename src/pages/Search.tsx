@@ -139,11 +139,25 @@ const Search = () => {
       const { data, error } = await supabase.functions.invoke("search-assets", {
         body: { query },
       });
-      if (error) throw error;
-      setResults(data.quotes || []);
+      if (error) {
+        const status = (error as any)?.context?.status;
+        const message =
+          status === 429
+            ? "Search is temporarily rate-limited by the data provider. Please try again in a minute."
+            : (error as any)?.message || "Search failed. Please try again.";
+        toast.error("Search failed", { description: message });
+        setResults([]);
+        return;
+      }
+      setResults((data as any)?.quotes || []);
     } catch (error: any) {
       console.error("Error searching assets:", error);
-      toast.error("Search failed", { description: error.message });
+      const status = error?.context?.status;
+      const message =
+        status === 429
+          ? "Search is temporarily rate-limited by the data provider. Please try again in a minute."
+          : error?.message || "Search failed. Please try again.";
+      toast.error("Search failed", { description: message });
       setResults([]);
     } finally {
       setIsLoading(false);

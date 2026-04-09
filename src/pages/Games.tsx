@@ -165,7 +165,7 @@ const Games = () => {
   const predictions = useMarketChallengeStore((s) => s.predictions);
   const addPrediction = useMarketChallengeStore((s) => s.addPrediction);
   const evaluatePredictions = useMarketChallengeStore(
-    (s) => s.evaluatePredictions
+    (s) => s.evaluatePredictions,
   );
   const clearAllPredictions = useMarketChallengeStore((s) => s.clearAll);
 
@@ -216,8 +216,10 @@ const Games = () => {
       if (error) {
         console.error("View Error:", error);
         // If the view is missing (42P01), notify user
-        if (error.code === '42P01') {
-          toast.error("Missing View: Please run the SQL to create 'user_daily_progress_view'");
+        if (error.code === "42P01") {
+          toast.error(
+            "Missing View: Please run the SQL to create 'user_daily_progress_view'",
+          );
         } else {
           toast.error("Failed to load history: " + error.message);
         }
@@ -241,14 +243,13 @@ const Games = () => {
         const delta = currentTotal - previousScore;
         series.push({
           date: row.day, // View returns 'day' column
-          points: delta
+          points: delta,
         });
         previousScore = currentTotal;
       });
 
       setPointsHistory(series);
       setTotalPointsHistory(previousScore);
-
     } catch (err) {
       console.error("History fetch failed:", err);
     } finally {
@@ -278,8 +279,8 @@ const Games = () => {
       // Revert to random universe if search cleared
       setSymbols(
         predictionStocks.map((s) =>
-          s.symbol.includes(".NS") ? s.symbol : `${s.symbol}.NS`
-        )
+          s.symbol.includes(".NS") ? s.symbol : `${s.symbol}.NS`,
+        ),
       );
       return;
     }
@@ -291,17 +292,26 @@ const Games = () => {
           "search-assets",
           {
             body: { query: searchQuery },
-          }
+          },
         );
-        if (error) throw error;
-        setSearchResults((data?.quotes || []) as SearchAssetResult[]);
+        if (error) {
+          const status = (error as any)?.context?.status;
+          const message =
+            status === 429
+              ? "Search is temporarily rate-limited by the data provider. Please try again shortly."
+              : (error as any)?.message || "Search failed. Please try again.";
+          toast.error("Search failed", { description: message });
+          setSearchResults([]);
+        } else {
+          setSearchResults((data?.quotes || []) as SearchAssetResult[]);
 
-        const equitySymbols = (data?.quotes || [])
-          .filter((q: SearchAssetResult) => q.quoteType === "EQUITY")
-          .map((q: SearchAssetResult) =>
-            q.symbol.endsWith(".NS") ? q.symbol : `${q.symbol}.NS`
-          );
-        if (equitySymbols.length) setSymbols(equitySymbols);
+          const equitySymbols = (data?.quotes || [])
+            .filter((q: SearchAssetResult) => q.quoteType === "EQUITY")
+            .map((q: SearchAssetResult) =>
+              q.symbol.endsWith(".NS") ? q.symbol : `${q.symbol}.NS`,
+            );
+          if (equitySymbols.length) setSymbols(equitySymbols);
+        }
       } catch (err) {
         console.error("Games search error:", err);
         setSearchResults([]);
@@ -322,7 +332,7 @@ const Games = () => {
     const equities = searchResults.filter(
       (r) =>
         r.quoteType === "EQUITY" &&
-        (r.exchange?.toUpperCase().includes("NSE") || r.symbol.endsWith(".NS"))
+        (r.exchange?.toUpperCase().includes("NSE") || r.symbol.endsWith(".NS")),
     );
 
     return equities.map((r) => {
@@ -341,7 +351,7 @@ const Games = () => {
           "get-stock-data",
           {
             body: { symbol: `${symbol}.NS`, days: 14 },
-          }
+          },
         );
         if (error || !data?.historicalData) return null;
         const hist = (data.historicalData as any[])
@@ -359,13 +369,13 @@ const Games = () => {
         return null;
       }
     },
-    []
+    [],
   );
 
   const handleEvaluateNow = () => {
     if (marketOpen) {
       toast.info(
-        "Evaluation is available only after market close (15:30 IST)."
+        "Evaluation is available only after market close (15:30 IST).",
       );
       return;
     }
@@ -375,7 +385,7 @@ const Games = () => {
   };
 
   const generateAndStartQuiz = async (
-    category: "basics" | "technical" | "news"
+    category: "basics" | "technical" | "news",
   ) => {
     setIsGeneratingQuiz(true);
     let topic = "Stock Market Basics";
@@ -462,7 +472,7 @@ const Games = () => {
     const percentCorrect =
       totalQuestions > 0 ? (score / totalQuestions) * 100 : 0;
     const earnedPoints = Math.round(
-      (percentCorrect / 100) * selectedQuiz.points
+      (percentCorrect / 100) * selectedQuiz.points,
     );
 
     addToBalance(earnedPoints);
@@ -496,7 +506,7 @@ const Games = () => {
     const today = new Date().toDateString();
     localStorage.setItem(
       `quiz_completed_${selectedQuiz.id}_${today}_${user.id}`,
-      "true"
+      "true",
     );
 
     // Log progress
@@ -504,7 +514,7 @@ const Games = () => {
       const difficulty = "medium";
       const activityScore = calculateQuizActivityScore(
         percentCorrect,
-        difficulty
+        difficulty,
       );
       await logGameActivity({
         gameType: "quiz",
@@ -572,15 +582,17 @@ const Games = () => {
                   </div>
                   <div className="flex items-center gap-4">
                     <div
-                      className={`font-semibold ${p.direction === "UP" ? "text-green-600" : "text-red-600"
-                        }`}
+                      className={`font-semibold ${
+                        p.direction === "UP" ? "text-green-600" : "text-red-600"
+                      }`}
                     >
                       {p.direction}
                     </div>
                     {p.resolved ? (
                       <div
-                        className={`text-sm ${isCorrect ? "text-green-700" : "text-orange-600"
-                          }`}
+                        className={`text-sm ${
+                          isCorrect ? "text-green-700" : "text-orange-600"
+                        }`}
                       >
                         {isCorrect ? "+500" : "-100"} pts
                       </div>
@@ -606,15 +618,22 @@ const Games = () => {
       <div className="grid md:grid-cols-2 gap-4">
         {filteredStocks.slice(0, 8).map((stock) => {
           const live = prices[stock.symbol];
-          const price = live ? live.price : 0;
+          const price =
+            typeof live?.price === "number"
+              ? live.price
+              : typeof (stock as any).price === "number"
+                ? (stock as any).price
+                : 0;
           const already = predictions.some(
             (p) =>
-              p.symbol === stock.symbol && p.dateISO === todayISO && !p.resolved
+              p.symbol === stock.symbol &&
+              p.dateISO === todayISO &&
+              !p.resolved,
           );
           const place = (dir: PredictionDirection) => {
             if (!marketOpen) {
               toast.info(
-                "Market is closed. Predictions allowed 09:15–15:30 IST (Mon–Fri)"
+                "Market is closed. Predictions allowed 09:15–15:30 IST (Mon–Fri)",
               );
               return;
             }
@@ -742,10 +761,11 @@ const Games = () => {
               className="h-full"
             >
               <Card
-                className={`text-center transition-all cursor-pointer h-full ${activeCategory === cat.id
-                  ? "border-2 border-learngreen-500 shadow-lg"
-                  : "hover:shadow-md"
-                  }`}
+                className={`text-center transition-all cursor-pointer h-full ${
+                  activeCategory === cat.id
+                    ? "border-2 border-learngreen-500 shadow-lg"
+                    : "hover:shadow-md"
+                }`}
                 onClick={() => setActiveCategory(cat.id)}
               >
                 <CardHeader>
@@ -874,7 +894,15 @@ const Games = () => {
                       id: stock.symbol,
                       symbol: stock.symbol,
                       name: live?.name || stock.name || stock.symbol,
-                      price: live?.price || 0,
+                      // Prefer live price; if not available, fall back to
+                      // any mock/base price attached to the stock object
+                      // instead of showing ₹0.00.
+                      price:
+                        typeof live?.price === "number"
+                          ? live.price
+                          : typeof (stock as any).price === "number"
+                            ? (stock as any).price
+                            : 0,
                       change: live?.change || 0,
                       changePercent: live?.changePercent || 0,
                       volume: 0,
@@ -963,12 +991,13 @@ const Games = () => {
                     const ok = buyStock(selectedStock, qty, priceToUse);
                     if (ok) {
                       toast.success(
-                        `Bought ${qty} ${selectedStock.symbol
-                        } @ ₹${priceToUse.toFixed(2)}`
+                        `Bought ${qty} ${
+                          selectedStock.symbol
+                        } @ ₹${priceToUse.toFixed(2)}`,
                       );
                       try {
                         usePortfolioStore.getState().addHistoryPoint(0); // Trigger history update logic roughly
-                      } catch { }
+                      } catch {}
                     } else toast.error("Insufficient balance");
                   })();
                 }

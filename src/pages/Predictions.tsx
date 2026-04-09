@@ -3,8 +3,9 @@ import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import NavigationBar from "@/components/NavigationBar";
-import { supabase } from "../lib/supabaseClient.ts";
+import { supabase } from "@/integrations/supabase/client";
 import { ArrowUp, ArrowDown } from "lucide-react";
+import { toast } from "sonner";
 
 // Fallback default watchlist when no search query
 const defaultStocks = [
@@ -65,12 +66,19 @@ const Predictions = () => {
               body: { symbol },
             })
             .then(({ data, error }) => {
-              if (error) {
+              if (error || !data?.currentPrice) {
                 console.error(`Error for ${symbol}:`, error);
                 return null;
               }
-              return { [symbol]: data.currentPrice };
-            })
+              const cp = data.currentPrice as any;
+              const price =
+                (typeof cp.price === "number" && cp.price) ||
+                (typeof cp.previousClose === "number" && cp.previousClose) ||
+                null;
+              if (!price || !Number.isFinite(price)) return null;
+              const diff = typeof cp.diff === "number" ? cp.diff : 0;
+              return { [symbol]: { price, diff } as StockData };
+            }),
         );
 
         const results = await Promise.all(promises);
@@ -78,7 +86,7 @@ const Predictions = () => {
           .filter(Boolean)
           .reduce(
             (acc, current) => ({ ...acc, ...current }),
-            {} as Record<string, StockData>
+            {} as Record<string, StockData>,
           );
 
         setStockData((prev) => ({ ...prev, ...mergedData }));
@@ -107,23 +115,32 @@ const Predictions = () => {
           "search-assets",
           {
             body: { query: searchQuery },
-          }
+          },
         );
-        if (error) throw error;
-        const quotes = (data?.quotes || []) as SearchAssetResult[];
-        setSearchResults(quotes);
+        if (error) {
+          const status = (error as any)?.context?.status;
+          const message =
+            status === 429
+              ? "Search is temporarily rate-limited by the data provider. Please try again in a minute."
+              : (error as any)?.message || "Search failed. Please try again.";
+          toast.error("Search failed", { description: message });
+          setSearchResults([]);
+        } else {
+          const quotes = (data?.quotes || []) as SearchAssetResult[];
+          setSearchResults(quotes);
 
-        const equitySymbols = quotes
-          .filter(
-            (q) =>
-              q.quoteType === "EQUITY" &&
-              (q.exchange?.toUpperCase().includes("NSE") ||
-                q.symbol.endsWith(".NS"))
-          )
-          .map((q) => (q.symbol.endsWith(".NS") ? q.symbol : `${q.symbol}.NS`));
+          const equitySymbols = quotes
+            .filter(
+              (q) =>
+                q.quoteType === "EQUITY" &&
+                (q.exchange?.toUpperCase().includes("NSE") ||
+                  q.symbol.endsWith(".NS")),
+            )
+            .map((q) =>
+              q.symbol.endsWith(".NS") ? q.symbol : `${q.symbol}.NS`,
+            );
 
-        if (equitySymbols.length) {
-          await (async () => {
+          if (equitySymbols.length) {
             const unique = Array.from(new Set(equitySymbols));
             const promises = unique.map((symbol) =>
               supabase.functions
@@ -135,18 +152,26 @@ const Predictions = () => {
                     console.error(`Error for ${symbol}:`, error);
                     return null;
                   }
-                  return { [symbol]: data.currentPrice };
-                })
+                  const cp = data.currentPrice as any;
+                  const price =
+                    (typeof cp.price === "number" && cp.price) ||
+                    (typeof cp.previousClose === "number" &&
+                      cp.previousClose) ||
+                    null;
+                  if (!price || !Number.isFinite(price)) return null;
+                  const diff = typeof cp.diff === "number" ? cp.diff : 0;
+                  return { [symbol]: { price, diff } as StockData };
+                }),
             );
             const results = await Promise.all(promises);
             const mergedData = results
               .filter(Boolean)
               .reduce(
                 (acc, current) => ({ ...acc, ...current }),
-                {} as Record<string, StockData>
+                {} as Record<string, StockData>,
               );
             setStockData((prev) => ({ ...prev, ...mergedData }));
-          })();
+          }
         }
       } catch (err) {
         console.error("Predictions search error:", err);
@@ -173,7 +198,7 @@ const Predictions = () => {
         (q) =>
           q.quoteType === "EQUITY" &&
           (q.exchange?.toUpperCase().includes("NSE") ||
-            q.symbol.endsWith(".NS"))
+            q.symbol.endsWith(".NS")),
       )
       .map((q) => (q.symbol.endsWith(".NS") ? q.symbol : `${q.symbol}.NS`));
   }, [searchQuery, searchResults]);

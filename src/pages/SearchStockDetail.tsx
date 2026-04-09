@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import NavigationBar from "@/components/NavigationBar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { supabase } from "../lib/supabaseClient.ts";
+import { supabase } from "@/integrations/supabase/client";
 import {
   LineChart as ReLineChart,
   Line,
@@ -36,7 +36,7 @@ const SearchStockDetail = () => {
 
   const [stockData, setStockData] = useState<StockDataPoint[]>([]);
   const [currentPrice, setCurrentPrice] = useState<CurrentPriceInfo | null>(
-    null
+    null,
   );
   const [loading, setLoading] = useState(true);
   const [days, setDays] = useState(90);
@@ -50,7 +50,7 @@ const SearchStockDetail = () => {
           "get-stock-data",
           {
             body: { symbol, days },
-          }
+          },
         );
 
         if (error) throw error;
@@ -66,7 +66,7 @@ const SearchStockDetail = () => {
               day: "numeric",
             }),
             close: item.close,
-          })
+          }),
         );
 
         setStockData(formatted);
@@ -88,7 +88,7 @@ const SearchStockDetail = () => {
         <div className="bg-white p-3 border border-gray-300 rounded-lg shadow-lg text-gray-800">
           <p className="font-bold text-sm">{`Date: ${label}`}</p>
           <p className="text-learngreen-600">{`Price: ₹${payload[0].value.toFixed(
-            2
+            2,
           )}`}</p>
         </div>
       );

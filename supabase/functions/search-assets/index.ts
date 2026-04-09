@@ -50,19 +50,30 @@ serve(async (req) => {
     });
   } catch (error) {
     console.error("search-assets error", error);
-    // Instead of returning a 5xx (which surfaces as
-    // "Edge Function returned a non-2xx status code" in the client),
-    // degrade gracefully and return an empty result set. This keeps the
-    // UI responsive and simply shows "No results" for transient Yahoo
-    // failures or rate limits.
+
+    // Try to extract an HTTP status code from the error message like
+    // "Yahoo search failed with status 429" so we can forward it to
+    // the client. This lets the frontend distinguish rate limits from
+    // other failures and show a helpful message instead of silent
+    // empty results.
+    const message = (error as Error).message ?? String(error);
+    const match = message.match(/status (\d{3})/);
+    const statusFromMessage = match ? Number(match[1]) : undefined;
+
+    const status =
+      typeof statusFromMessage === "number" &&
+      Number.isFinite(statusFromMessage)
+        ? statusFromMessage
+        : 500;
+
     return new Response(
       JSON.stringify({
         quotes: [],
-        error: (error as Error).message ?? String(error),
+        error: message,
       }),
       {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
-        status: 200,
+        status,
       },
     );
   }

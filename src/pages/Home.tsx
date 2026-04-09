@@ -369,7 +369,8 @@ const Home = () => {
           // "Current" stocks value based on live prices when available,
           // otherwise mock price, otherwise average buy price.
           const investedValueRaw = holdings.reduce((s, h) => {
-            const live = prices[h.symbol];
+            const key = baseSymbol(h.symbol);
+            const live = prices[key];
             const currentPrice = live
               ? live.price
               : (mockStocks.find((m) => m.id === h.stockId)?.price ??

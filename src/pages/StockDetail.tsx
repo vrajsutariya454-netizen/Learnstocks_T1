@@ -17,7 +17,7 @@ import { TrendingUp, TrendingDown, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import NavigationBar from "@/components/NavigationBar";
-import { supabase } from "../lib/supabaseClient.ts";
+import { supabase } from "@/integrations/supabase/client";
 
 // Define a type for a single data point in our chart
 type StockDataPoint = {
