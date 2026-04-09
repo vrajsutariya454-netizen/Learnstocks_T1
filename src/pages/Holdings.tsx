@@ -11,6 +11,11 @@ import { toast } from "sonner";
 import { useBalanceStore } from "@/stores/balanceStore";
 import { useAuth } from "@/contexts/AuthContext";
 
+// Helper to consistently handle NSE symbols.
+const baseSymbol = (symbol: string) => symbol.replace(".NS", "");
+const toNseSymbol = (symbol: string) =>
+  symbol.includes(".") || symbol.includes("-") ? symbol : `${symbol}.NS`;
+
 const HoldingsPage = () => {
   const holdings = usePortfolioStore((s) => s.holdings);
   const sellStock = usePortfolioStore((s) => s.sellStock);
@@ -22,13 +27,13 @@ const HoldingsPage = () => {
   const [isSellDialogOpen, setIsSellDialogOpen] = useState(false);
   const [selectedHolding, setSelectedHolding] = useState<any | null>(null);
   const [selectedSellStock, setSelectedSellStock] = useState<Stock | null>(
-    null
+    null,
   );
   const { user } = useAuth();
 
   useEffect(() => {
     const syms = Array.from(
-      new Set([...holdings.map((h) => `${h.symbol}.NS`)])
+      new Set(holdings.map((h) => toNseSymbol(baseSymbol(h.symbol)))),
     );
     setSymbols(syms);
   }, [holdings]);
@@ -78,28 +83,30 @@ const HoldingsPage = () => {
               )}
 
               {holdings.map((holding) => {
-                const live = prices[holding.symbol];
+                const key = baseSymbol(holding.symbol);
+                const live = prices[key];
                 const mock = mockStocks.find(
-                  (m) => m.id === holding.stockId
+                  (m) => m.id === holding.stockId,
                 ) as Stock | undefined;
                 const currentPrice = live
                   ? live.price
                   : mock
-                  ? mock.price
-                  : holding.avgBuyPrice;
+                    ? mock.price
+                    : holding.avgBuyPrice;
                 const currentChange = live
-                  ? live.change ?? 0
+                  ? (live.change ?? 0)
                   : mock
-                  ? mock.change ?? 0
-                  : 0;
+                    ? (mock.change ?? 0)
+                    : 0;
                 const value = holding.quantity * currentPrice;
                 const pnl = value - holding.quantity * holding.avgBuyPrice;
                 const pnlPct =
                   (pnl / (holding.quantity * holding.avgBuyPrice)) * 100;
                 const totalHoldingsValue = holdings.reduce((s, h) => {
                   const m = mockStocks.find((x) => x.id === h.stockId);
+                  const k = baseSymbol(h.symbol);
                   const price =
-                    prices[h.symbol]?.price ?? (m ? m.price : h.avgBuyPrice);
+                    prices[k]?.price ?? (m ? m.price : h.avgBuyPrice);
                   return s + price * h.quantity;
                 }, 0);
                 const sharePercent =
@@ -188,15 +195,15 @@ const HoldingsPage = () => {
                         size="sm"
                         variant="outline"
                         onClick={async () => {
-                          const symNs = `${holding.symbol}.NS`;
+                          const key = baseSymbol(holding.symbol);
+                          const symNs = toNseSymbol(key);
                           const fetched = await fetchPrices([symNs]);
-                          const liveFetched =
-                            fetched[holding.symbol] || prices[holding.symbol];
+                          const liveFetched = fetched[key] || prices[key];
                           const priceToUse = liveFetched
                             ? liveFetched.price
                             : mock
-                            ? mock.price
-                            : holding.avgBuyPrice;
+                              ? mock.price
+                              : holding.avgBuyPrice;
                           const stockObj: Stock = {
                             id: holding.stockId,
                             symbol: holding.symbol,
@@ -234,21 +241,20 @@ const HoldingsPage = () => {
           onConfirm={(qty) => {
             if (!selectedHolding) return;
             (async () => {
-              const symNs = `${selectedHolding.symbol}.NS`;
+              const key = baseSymbol(selectedHolding.symbol);
+              const symNs = toNseSymbol(key);
               const fetched = await fetchPrices([symNs]);
-              const live =
-                fetched[selectedHolding.symbol] ||
-                prices[selectedHolding.symbol];
+              const live = fetched[key] || prices[key];
               const priceToUse = live
                 ? live.price
-                : mockStocks.find((m) => m.id === selectedHolding.stockId)
-                    ?.price ?? selectedHolding.avgBuyPrice;
+                : (mockStocks.find((m) => m.id === selectedHolding.stockId)
+                    ?.price ?? selectedHolding.avgBuyPrice);
               const ok = sellStock(selectedHolding.stockId, qty, priceToUse);
               if (ok)
                 toast.success(
                   `Sold ${qty} ${
                     selectedHolding.symbol
-                  } @ ₹${priceToUse.toFixed(2)}`
+                  } @ ₹${priceToUse.toFixed(2)}`,
                 );
               else toast.error("Sell failed: invalid qty");
               if (ok) {
@@ -256,8 +262,9 @@ const HoldingsPage = () => {
                   const combined = { ...(prices || {}), ...(fetched || {}) };
                   const portfolio = usePortfolioStore.getState();
                   const investedValue = portfolio.holdings.reduce((s, h) => {
+                    const k = baseSymbol(h.symbol);
                     const p =
-                      combined[h.symbol]?.price ??
+                      combined[k]?.price ??
                       mockStocks.find((m) => m.id === h.stockId)?.price ??
                       h.avgBuyPrice;
                     return s + h.quantity * p;
@@ -266,7 +273,7 @@ const HoldingsPage = () => {
                 } catch (err) {
                   console.error(
                     "Failed to append history point after sell",
-                    err
+                    err,
                   );
                 }
               }

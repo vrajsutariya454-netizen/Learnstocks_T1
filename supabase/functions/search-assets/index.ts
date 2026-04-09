@@ -11,7 +11,7 @@ const corsHeaders = {
 
 async function yahooSearch(query: string) {
   const url = `https://query1.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(
-    query
+    query,
   )}&quotesCount=20&newsCount=0`;
   const resp = await fetch(url);
 
@@ -50,12 +50,20 @@ serve(async (req) => {
     });
   } catch (error) {
     console.error("search-assets error", error);
+    // Instead of returning a 5xx (which surfaces as
+    // "Edge Function returned a non-2xx status code" in the client),
+    // degrade gracefully and return an empty result set. This keeps the
+    // UI responsive and simply shows "No results" for transient Yahoo
+    // failures or rate limits.
     return new Response(
-      JSON.stringify({ error: (error as Error).message ?? String(error) }),
+      JSON.stringify({
+        quotes: [],
+        error: (error as Error).message ?? String(error),
+      }),
       {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
-        status: 500,
-      }
+        status: 200,
+      },
     );
   }
 });

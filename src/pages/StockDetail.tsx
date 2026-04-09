@@ -33,7 +33,7 @@ const StockDetail = () => {
   const [isTradeOpen, setIsTradeOpen] = useState(false);
   const [tradeAction, setTradeAction] = useState<"buy" | "sell">("buy");
   const [selectedTradeStock, setSelectedTradeStock] = useState<any | null>(
-    null
+    null,
   );
   const [days, setDays] = useState(90); // Default to 90 days for a better initial view
   const [prediction, setPrediction] = useState<number | null>(null);
@@ -50,7 +50,7 @@ const StockDetail = () => {
           "get-stock-data",
           {
             body: { symbol, days },
-          }
+          },
         );
 
         if (error) throw error;
@@ -64,7 +64,7 @@ const StockDetail = () => {
               month: "short",
               day: "numeric",
             }),
-          })
+          }),
         );
         setStockData(formattedData);
       } catch (err) {
@@ -84,13 +84,19 @@ const StockDetail = () => {
 
   const openTrade = async (action: "buy" | "sell") => {
     if (!symbol) return;
-    const ns = `${symbol}.NS`;
+    // Normalize symbols so we don't accidentally call MAHABANK.NS.NS
+    const baseSymbol = symbol.replace(".NS", "");
+    const ns =
+      baseSymbol.includes(".") || baseSymbol.includes("-")
+        ? baseSymbol
+        : `${baseSymbol}.NS`;
+
     const fetched = await fetchPrices([ns]);
-    const live = fetched?.[symbol] || prices?.[symbol];
+    const live = fetched?.[baseSymbol] || prices?.[baseSymbol];
     const priceToUse = live?.price ?? currentPrice?.price ?? 0;
     const stockObj = {
-      id: symbol,
-      symbol: symbol,
+      id: baseSymbol,
+      symbol: baseSymbol,
       name: currentPrice?.shortName || currentPrice?.longName || symbol,
       price: priceToUse,
       change: live?.change ?? currentPrice?.diff ?? 0,
@@ -111,15 +117,15 @@ const StockDetail = () => {
       if (ok)
         toast.success(
           `Bought ${qty} ${selectedTradeStock.symbol} @ ₹${priceToUse.toFixed(
-            2
-          )}`
+            2,
+          )}`,
         );
       else toast.error("Buy failed: insufficient balance or invalid quantity");
     } else {
       ok = sellStock(selectedTradeStock.id, qty, priceToUse);
       if (ok)
         toast.success(
-          `Sold ${qty} ${selectedTradeStock.symbol} @ ₹${priceToUse.toFixed(2)}`
+          `Sold ${qty} ${selectedTradeStock.symbol} @ ₹${priceToUse.toFixed(2)}`,
         );
       else toast.error("Sell failed: invalid qty");
     }
@@ -213,7 +219,7 @@ const StockDetail = () => {
             {label === "Pred." ? `Prediction` : `Date: ${label}`}
           </p>
           <p className="text-learngreen-600">{`Price: ₹${payload[0].value.toFixed(
-            2
+            2,
           )}`}</p>
         </div>
       );

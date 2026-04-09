@@ -69,7 +69,7 @@ const Search = () => {
         const promises = POPULAR_ASSETS.map((symbol) =>
           supabase.functions.invoke("get-stock-data", {
             body: { symbol },
-          })
+          }),
         );
 
         const responses = await Promise.all(promises);
@@ -78,19 +78,34 @@ const Search = () => {
           .filter(({ data, error }) => !error && data?.currentPrice)
           .map(({ data }) => {
             const cp = data.currentPrice;
+            // Prefer a real-time price; otherwise fall back to previousClose.
+            const rawPrice: number =
+              (typeof cp.price === "number" ? cp.price : null) ??
+              (typeof cp.previousClose === "number" ? cp.previousClose : 0);
+
+            // If we still don't have a sane price, skip this asset rather
+            // than showing ₹0.00 which confuses the user.
+            if (!rawPrice || !Number.isFinite(rawPrice) || rawPrice <= 0) {
+              return null;
+            }
+
             const pct =
-              cp.regularMarketChangePercent ??
-              (cp.previousClose ? (cp.diff / cp.previousClose) * 100 : 0);
+              typeof cp.regularMarketChangePercent === "number"
+                ? cp.regularMarketChangePercent
+                : cp.previousClose && typeof cp.diff === "number"
+                  ? (cp.diff / cp.previousClose) * 100
+                  : 0;
             return {
               symbol: data.symbol,
               name: cp.longName || cp.shortName || data.symbol,
-              price: cp.price || 0,
+              price: rawPrice,
               change: cp.diff || 0,
               changePercent: typeof pct === "number" ? pct : 0,
             };
           });
 
-        setPopularAssets(fetchedAssets);
+        // Filter out any nulls from the skip-logic above
+        setPopularAssets(fetchedAssets.filter(Boolean) as PopularAssetData[]);
       } catch (error) {
         console.error("Failed to fetch popular assets", error);
         toast.error("Could not load popular assets.");
@@ -137,15 +152,15 @@ const Search = () => {
 
   const stocks = useMemo(
     () => results.filter((r) => r.quoteType === "EQUITY"),
-    [results]
+    [results],
   );
   const etfs = useMemo(
     () => results.filter((r) => r.quoteType === "ETF"),
-    [results]
+    [results],
   );
   const mutualFunds = useMemo(
     () => results.filter((r) => r.quoteType === "MUTUALFUND"),
-    [results]
+    [results],
   );
 
   const handleViewDetails = (symbol: string) => {

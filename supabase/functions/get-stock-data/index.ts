@@ -19,13 +19,13 @@ type HistoricalPoint = { date: string; close: number };
 async function fetchCurrentQuote(symbol: string) {
   const resp = await fetch(
     `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(
-      symbol
-    )}?interval=1d&range=1d`
+      symbol,
+    )}?interval=1d&range=1d`,
   );
 
   if (!resp.ok) {
     throw new Error(
-      `Failed to fetch current quote for ${symbol} (status ${resp.status})`
+      `Failed to fetch current quote for ${symbol} (status ${resp.status})`,
     );
   }
 
@@ -36,16 +36,46 @@ async function fetchCurrentQuote(symbol: string) {
   }
 
   const meta = result.meta;
+  // Sometimes the meta block does not contain a regularMarketPrice even
+  // though the chart data has recent closes. In that case, fall back to the
+  // latest valid close from the time-series so that we never silently return
+  // a price of 0.
+  let lastClose: number | null = null;
+  try {
+    const closes: (number | null)[] | undefined =
+      result?.indicators?.quote?.[0]?.close;
+    if (Array.isArray(closes) && closes.length > 0) {
+      for (let i = closes.length - 1; i >= 0; i--) {
+        const c = closes[i];
+        if (c != null && !Number.isNaN(c)) {
+          lastClose = c;
+          break;
+        }
+      }
+    }
+  } catch (_) {
+    // Ignore errors from historical parsing; we'll just rely on meta fields.
+  }
+
   const price =
     meta.regularMarketPrice ??
     meta.chartPreviousClose ??
     meta.previousClose ??
+    lastClose ??
     null;
-  const previousClose = meta.previousClose ?? meta.chartPreviousClose ?? null;
+
+  const previousClose =
+    meta.previousClose ?? meta.chartPreviousClose ?? lastClose ?? null;
+
   const diff =
     price != null && previousClose != null ? price - previousClose : null;
+
   const changePercent =
-    diff != null && previousClose ? (diff / previousClose) * 100 : null;
+    typeof meta.regularMarketChangePercent === "number"
+      ? meta.regularMarketChangePercent
+      : diff != null && previousClose
+        ? (diff / previousClose) * 100
+        : null;
 
   return {
     price,
@@ -60,14 +90,14 @@ async function fetchCurrentQuote(symbol: string) {
 
 async function fetchHistorical(
   symbol: string,
-  days: number
+  days: number,
 ): Promise<HistoricalPoint[]> {
   if (!days || days <= 0) return [];
 
   // Use the Yahoo chart API instead of CSV download (which now requires auth)
   const range = `${days}d`;
   const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(
-    symbol
+    symbol,
   )}?interval=1d&range=${range}`;
 
   const resp = await fetch(url);
@@ -77,7 +107,7 @@ async function fetchHistorical(
       "get-stock-data historical fetch failed",
       symbol,
       resp.status,
-      resp.statusText
+      resp.statusText,
     );
     return [];
   }
@@ -120,7 +150,7 @@ serve(async (req) => {
         {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
           status: 400,
-        }
+        },
       );
     }
 
@@ -140,7 +170,7 @@ serve(async (req) => {
       {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
         status: 500,
-      }
+      },
     );
   }
 });

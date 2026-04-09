@@ -150,10 +150,15 @@ const Home = () => {
     }
   }, [user, fetchUserData, setBalance, syncFromBackend]);
 
+  // Symbol helpers to avoid mistakes like HINDUNILVR.NS.NS
+  const baseSymbol = (symbol: string) => symbol.replace(".NS", "");
+  const toNseSymbol = (symbol: string) =>
+    symbol.includes(".") || symbol.includes("-") ? symbol : `${symbol}.NS`;
+
   // set symbols to fetch: holdings only (removed Trading section)
   useEffect(() => {
     const syms = Array.from(
-      new Set([...holdings.map((h) => `${h.symbol}.NS`)]),
+      new Set(holdings.map((h) => toNseSymbol(baseSymbol(h.symbol)))),
     );
     setSymbols(syms);
   }, [holdings]);
@@ -166,8 +171,9 @@ const Home = () => {
         // use currently polled prices from hook and snapshot ONLY invested equity (exclude cash)
         const currentPrices = prices || {};
         const investedValue = portfolio.holdings.reduce((s, h) => {
+          const key = baseSymbol(h.symbol);
           const p =
-            currentPrices[h.symbol]?.price ??
+            currentPrices[key]?.price ??
             mockStocks.find((m) => m.id === h.stockId)?.price ??
             h.avgBuyPrice;
           return s + h.quantity * p;
@@ -208,12 +214,14 @@ const Home = () => {
         // Fetch historical for each symbol
         const results = await Promise.all(
           symbols.map(async (sym) => {
+            const base = baseSymbol(sym);
+            const symbolForApi = toNseSymbol(base);
             let hist: { date: string; close: number }[] = [];
 
             // Try fetching from API
             const { data, error } = await supabase.functions.invoke(
               "get-stock-data",
-              { body: { symbol: `${sym}.NS`, days } },
+              { body: { symbol: symbolForApi, days } },
             );
 
             if (
@@ -734,11 +742,10 @@ const Home = () => {
                             variant="outline"
                             onClick={async () => {
                               // fetch fresh price before opening sell dialog
-                              const symNs = `${holding.symbol}.NS`;
+                              const key = baseSymbol(holding.symbol);
+                              const symNs = toNseSymbol(key);
                               const fetched = await fetchPrices([symNs]);
-                              const liveFetched =
-                                fetched[holding.symbol] ||
-                                prices[holding.symbol];
+                              const liveFetched = fetched[key] || prices[key];
                               const priceToUse = liveFetched
                                 ? liveFetched.price
                                 : mock
@@ -782,11 +789,10 @@ const Home = () => {
             onConfirm={(qty) => {
               if (!selectedHolding) return;
               (async () => {
-                const symNs = `${selectedHolding.symbol}.NS`;
+                const key = baseSymbol(selectedHolding.symbol);
+                const symNs = toNseSymbol(key);
                 const fetched = await fetchPrices([symNs]);
-                const live =
-                  fetched[selectedHolding.symbol] ||
-                  prices[selectedHolding.symbol];
+                const live = fetched[key] || prices[key];
                 const priceToUse = live
                   ? live.price
                   : (mockStocks.find((m) => m.id === selectedHolding.stockId)
@@ -805,8 +811,9 @@ const Home = () => {
                     const combined = { ...(prices || {}), ...(fetched || {}) };
                     const portfolio = usePortfolioStore.getState();
                     const investedValue = portfolio.holdings.reduce((s, h) => {
+                      const k = baseSymbol(h.symbol);
                       const p =
-                        combined[h.symbol]?.price ??
+                        combined[k]?.price ??
                         mockStocks.find((m) => m.id === h.stockId)?.price ??
                         h.avgBuyPrice;
                       return s + h.quantity * p;
