@@ -8,6 +8,106 @@ from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 # Initialize Vader Sentiment
 analyzer = SentimentIntensityAnalyzer()
 
+# Specialized Financial, Market, Profit-Loss and Business Lexicon
+FINANCIAL_LEXICON = {
+    # --- Positive Profit, Growth, Valuation & Market Terms ---
+    "beat": 2.5,
+    "beats": 2.5,
+    "beating": 2.5,
+    "outperform": 3.0,
+    "outperforms": 3.0,
+    "outperforming": 3.0,
+    "bullish": 3.5,
+    "upside": 3.0,
+    "growth": 2.5,
+    "profitable": 3.0,
+    "profitability": 3.0,
+    "profit": 2.5,
+    "profits": 2.5,
+    "gains": 2.0,
+    "dividend": 1.5,
+    "dividends": 1.5,
+    "raise": 2.0,
+    "raised": 2.0,
+    "upgrade": 3.0,
+    "upgraded": 3.0,
+    "upgrades": 3.0,
+    "rebound": 2.0,
+    "rebounds": 2.0,
+    "rally": 3.0,
+    "rallies": 3.0,
+    "soar": 3.5,
+    "soars": 3.5,
+    "soaring": 3.5,
+    "surge": 3.0,
+    "surges": 3.0,
+    "surging": 3.0,
+    "buy": 2.5,
+    "strong": 2.0,
+    "strength": 2.0,
+    "inflows": 2.5,
+    "expansion": 2.0,
+    "undervalued": 2.5,
+    "overweight": 2.0,
+    "ebitda": 1.5,
+    "rev": 1.5,
+    "sales_growth": 2.5,
+    "robust": 2.5,
+    "steady": 1.5,
+    "recovering": 2.0,
+
+    # --- Negative Decline, Loss, Debt & Risk Terms ---
+    "miss": -2.5,
+    "misses": -2.5,
+    "missing": -2.5,
+    "underperform": -3.0,
+    "underperforms": -3.0,
+    "underperforming": -3.0,
+    "bearish": -3.5,
+    "downside": -3.0,
+    "decline": -2.0,
+    "declined": -2.0,
+    "declining": -2.0,
+    "loss": -3.0,
+    "losses": -3.0,
+    "unprofitable": -3.0,
+    "drop": -2.0,
+    "drops": -2.0,
+    "dropped": -2.0,
+    "cut": -2.0,
+    "cuts": -2.0,
+    "downgrade": -3.0,
+    "downgraded": -3.0,
+    "downgrades": -3.0,
+    "plunge": -3.5,
+    "plunges": -3.5,
+    "plunging": -3.5,
+    "slump": -3.0,
+    "slumps": -3.0,
+    "slumping": -3.0,
+    "sell": -2.5,
+    "weak": -2.0,
+    "weakness": -2.0,
+    "outflows": -2.5,
+    "contraction": -2.0,
+    "debt": -1.5,
+    "deficit": -2.5,
+    "recession": -3.0,
+    "inflationary": -1.5,
+    "overvalued": -2.5,
+    "underweight": -2.0,
+    "default": -3.5,
+    "bankrupt": -4.0,
+    "bankruptcy": -4.0,
+    "slowdown": -2.0,
+    "write_down": -3.0,
+    "write_off": -3.0,
+    "stagnant": -1.5,
+}
+
+# Update VADER lexicon dynamically
+analyzer.lexicon.update(FINANCIAL_LEXICON)
+
 def calculate_rsi(prices, period=14):
     """Calculate Relative Strength Index (RSI)"""
     if len(prices) < period + 1:
@@ -135,11 +235,36 @@ def fetch_sentiment_and_news(symbol: str) -> dict:
         news = ticker.news or []
         
         for art in news[:10]:
-            title = art.get("title", "")
-            summary = art.get("summary", "") or art.get("description", "") or ""
-            publisher = art.get("publisher", "")
-            link = art.get("link", "")
-            pub_time = art.get("providerPublishTime", 0)
+            # Handle new nested content structure vs legacy flat structure
+            content = art.get("content", {}) if "content" in art else art
+            
+            title = content.get("title", "")
+            summary = content.get("summary", "") or content.get("description", "") or ""
+            
+            # Publisher handling
+            provider = content.get("provider", {})
+            publisher = provider.get("displayName", "") if isinstance(provider, dict) else content.get("publisher", "")
+            
+            # Link handling
+            canonical = content.get("canonicalUrl", {})
+            clickthrough = content.get("clickThroughUrl", {})
+            link = ""
+            if isinstance(canonical, dict):
+                link = canonical.get("url", "")
+            if not link and isinstance(clickthrough, dict):
+                link = clickthrough.get("url", "")
+            if not link:
+                link = content.get("link", "")
+                
+            # Publish time handling
+            pub_date_str = content.get("pubDate", "")
+            if pub_date_str:
+                try:
+                    pub_time = int(pd.Timestamp(pub_date_str).timestamp())
+                except Exception:
+                    pub_time = int(pd.Timestamp.now().timestamp())
+            else:
+                pub_time = content.get("providerPublishTime", 0)
             
             # Sentiment score
             full_text = f"{title} {summary}"
