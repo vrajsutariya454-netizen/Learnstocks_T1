@@ -921,7 +921,7 @@ def agents_forecast(body: dict):
     """Generate a multi-day future price forecast using a weighted autoregressive model.
     Does NOT require TensorFlow — uses numpy-based exponential smoothing + momentum."""
     symbol = body.get("symbol", "GOOG").upper().strip()
-    forecast_days = min(body.get("forecast_days", 7), 30)
+    forecast_days = min(body.get("forecast_days", 7), 90)
 
     try:
         ticker = yf.Ticker(symbol)
@@ -946,23 +946,79 @@ def agents_forecast(body: dict):
         return {"symbol": symbol, "forecast": forecasts, "model": "fallback_random_walk"}
 
     closes = hist["Close"].dropna().values.astype(float)
+    last_close = float(closes[-1])
 
-    # --- Autoregressive Weighted Forecast Model ---
-    # Components:
-    #   1. Exponential Moving Average (EMA-10) for trend
-    #   2. Momentum factor (10-day rate of change)
-    #   3. Mean reversion toward SMA-50
-    #   4. Volatility-scaled noise for realistic spread
+    # Try fitting Triple Exponential Smoothing (Holt-Winters) from the Stocks workspace
+    try:
+        from statsmodels.tsa.holtwinters import ExponentialSmoothing
+        import warnings
+        
+        if len(closes) >= 30:
+            seasonal_periods = 252 if len(closes) >= 500 else (21 if len(closes) >= 50 else None)
+            seasonal_type = "add" if seasonal_periods is not None else None
+            
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                # Fit damped Holt-Winters model
+                model_tes = ExponentialSmoothing(
+                    closes,
+                    trend="add",
+                    seasonal=seasonal_type,
+                    seasonal_periods=seasonal_periods,
+                    damped_trend=True
+                )
+                fit_tes = model_tes.fit()
+                # Forecast the required days
+                predicted_values = fit_tes.forecast(forecast_days)
+                
+                # Use standard deviation of residuals to estimate prediction confidence bounds
+                residuals = fit_tes.resid
+                resid_std = float(np.std(residuals)) if len(residuals) > 0 else (last_close * 0.015)
+                
+                forecasts = []
+                for i in range(forecast_days):
+                    current = float(predicted_values[i])
+                    # Ensure price doesn't drop below 0
+                    current = max(current, last_close * 0.1)
+                    
+                    # Confidence bounds widen over time
+                    time_factor = np.sqrt(i + 1)
+                    upper = current + (resid_std * 1.96 * time_factor * 0.3)
+                    lower = max(current - (resid_std * 1.96 * time_factor * 0.3), last_close * 0.05)
+                    
+                    forecast_date = pd.Timestamp.now() + pd.Timedelta(days=i + 1)
+                    while forecast_date.weekday() >= 5:
+                        forecast_date += pd.Timedelta(days=1)
+                        
+                    forecasts.append({
+                        "day": i + 1,
+                        "date": forecast_date.strftime("%Y-%m-%d"),
+                        "predicted_close": round(current, 2),
+                        "upper_bound": round(upper, 2),
+                        "lower_bound": round(lower, 2),
+                    })
+                
+                return {
+                    "symbol": symbol,
+                    "last_close": round(last_close, 2),
+                    "forecast": forecasts,
+                    "model": "holt_winters_triple_exponential_smoothing",
+                    "volatility_daily_pct": round((resid_std / last_close) * 100, 3) if last_close > 0 else 0.0,
+                    "momentum_10d_pct": round(((closes[-1] - closes[-10]) / closes[-10]) * 100, 3) if len(closes) >= 10 else 0.0
+                }
+    except Exception as e:
+        # Fallback to the high-fidelity autoregressive model if statsmodels fails or is not installed
+        pass
 
+    # --- Autoregressive Weighted Forecast Model Fallback ---
     ema_span = 10
     ema_weights = np.array([(2.0 / (ema_span + 1)) * ((ema_span - 1.0) / (ema_span + 1.0)) ** i for i in range(min(ema_span, len(closes)))])
     ema_weights = ema_weights / ema_weights.sum()
 
     sma50 = float(np.mean(closes[-50:])) if len(closes) >= 50 else float(np.mean(closes[-20:]))
-    last_close = float(closes[-1])
 
     # Daily returns for volatility estimation
-    returns = np.diff(closes[-60:]) / closes[-61:-1] if len(closes) > 61 else np.diff(closes) / closes[:-1]
+    returns = np.diff(closes[-61:]) / closes[-61:-1] if len(closes) > 61 else np.diff(closes) / closes[:-1]
     daily_vol = float(np.std(returns)) if len(returns) > 1 else 0.015
     momentum = (closes[-1] - closes[-10]) / closes[-10] if len(closes) >= 10 else 0.0
 
@@ -1011,7 +1067,7 @@ def agents_forecast(body: dict):
         "symbol": symbol,
         "last_close": round(last_close, 2),
         "forecast": forecasts,
-        "model": "autoregressive_ema_momentum_meanrev",
+        "model": "autoregressive_ema_momentum_meanrev_fallback",
         "volatility_daily_pct": round(daily_vol * 100, 3),
         "momentum_10d_pct": round(momentum * 100, 3),
     }
