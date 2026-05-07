@@ -39,7 +39,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import NavigationBar from "@/components/NavigationBar";
 import { fetchStockData } from "@/services/stockApi";
-import { runAgentAnalysis, AgentStep } from "@/services/agentApi";
+import { runAgentAnalysis, AgentStep, fetchForecast } from "@/services/agentApi";
 import { motion, AnimatePresence } from "framer-motion";
 
 // Custom light/dark theme-aware markdown helper parser
@@ -171,6 +171,7 @@ const StockDetail = () => {
 
   // Core Stock Data State
   const [stockData, setStockData] = useState<StockDataPoint[]>([]);
+  const [forecastData, setForecastData] = useState<any[]>([]);
   const [currentPrice, setCurrentPrice] = useState<any | null>(null);
   const [days, setDays] = useState(90);
   const [loading, setLoading] = useState(true);
@@ -224,6 +225,16 @@ const StockDetail = () => {
           })
         );
         setStockData(formattedData);
+
+        // Fetch 60-day forecast trend
+        try {
+          const forecastRes = await fetchForecast(symbol, 60);
+          if (forecastRes && forecastRes.forecast) {
+            setForecastData(forecastRes.forecast);
+          }
+        } catch (fErr) {
+          console.error("Failed to fetch forecast:", fErr);
+        }
       } catch (err) {
         console.error("Error fetching stock data:", err);
         toast.error("Failed to fetch stock data.");
@@ -275,7 +286,7 @@ const StockDetail = () => {
     try {
       await runAgentAnalysis(symbol, days, (step) => {
         const timeStr = new Date().toLocaleTimeString("en-US", { hour12: false });
-        
+
         // Handle Agent status and console logging updates
         if (step.agent && step.agent !== "System") {
           // Track index of active agent for UI spotlight
@@ -321,6 +332,15 @@ const StockDetail = () => {
             if (risk) setRiskMetrics(risk);
             if (recommendation) setRecommendationMetrics(recommendation);
             if (report) setAnalysisReport(report);
+          }
+
+          // Refresh the 60-day forecast to synchronize
+          try {
+            fetchForecast(symbol, 60).then((res) => {
+              if (res && res.forecast) setForecastData(res.forecast);
+            });
+          } catch (fErr) {
+            console.error("Failed to refresh forecast:", fErr);
           }
         }
       });
@@ -388,38 +408,45 @@ const StockDetail = () => {
     setSelectedTradeStock(null);
   };
 
-  // Build predictions chart sequence (append predicted price dynamically with visual standard deviation boundaries)
+  // Build predictions chart sequence (append 60-day predicted trend dynamically with visual standard deviation boundaries)
   const chartData = React.useMemo(() => {
     if (!stockData.length) return [];
-    if (!indicatorsMetrics) return stockData;
 
-    const baseData = [...stockData];
+    const baseData = stockData.map(item => ({ ...item }));
+
+    if (!forecastData || !forecastData.length) {
+      return baseData;
+    }
+
     const lastPoint = baseData[baseData.length - 1];
 
-    // Predict a next-day closing target based on momentum indicator
-    const changePct = (indicatorsMetrics.momentum || 0.5) / 15;
-    const predictedClose = lastPoint.close * (1 + changePct / 100);
-    const vol = indicatorsMetrics.volatility || 1.2;
-
-    const predPoint = {
-      date: "Prediction",
-      close: predictedClose,
-      // Calculate standard deviation upper/lower channels for chart shadow
-      upperConfidence: predictedClose * (1 + (vol * 1.5) / 100),
-      lowerConfidence: predictedClose * (1 - (vol * 1.5) / 100)
-    };
-
-    // Ensure the last real closing has shadow bounds connecting seamlessly to the prediction
+    // Ensure the last real closing has shadow bounds and prediction value connecting seamlessly to the forecast
     lastPoint.upperConfidence = lastPoint.close;
     lastPoint.lowerConfidence = lastPoint.close;
+    lastPoint.prediction = lastPoint.close; // Bridge Predicted Price line to real Close Price
 
-    return [...baseData, predPoint];
-  }, [stockData, indicatorsMetrics]);
+    const forecastPoints = forecastData.map((fPoint) => {
+      const formattedDate = new Date(fPoint.date).toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+      });
+
+      return {
+        date: formattedDate,
+        prediction: fPoint.predicted_close, // Unique key!
+        upperConfidence: fPoint.upper_bound,
+        lowerConfidence: fPoint.lower_bound,
+        isForecast: true
+      };
+    });
+
+    return [...baseData, ...forecastPoints];
+  }, [stockData, forecastData]);
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors duration-300">
       <NavigationBar />
-      
+
       <main className="container mx-auto px-4 py-6 max-w-7xl">
         {/* Navigation back and selector */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
@@ -492,9 +519,8 @@ const StockDetail = () => {
                 ₹{(currentPrice?.price ?? 0).toFixed(2)}
               </div>
               <div
-                className={`text-sm font-semibold flex items-center gap-1 mt-0.5 md:justify-end ${
-                  (currentPrice?.diff ?? 0) >= 0 ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"
-                }`}
+                className={`text-sm font-semibold flex items-center gap-1 mt-0.5 md:justify-end ${(currentPrice?.diff ?? 0) >= 0 ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"
+                  }`}
               >
                 {(currentPrice?.diff ?? 0) >= 0 ? "+" : ""}
                 {(currentPrice?.diff ?? 0).toFixed(2)} (
@@ -583,7 +609,7 @@ const StockDetail = () => {
                         }}
                       />
                       {/* Technical Confidence Shadow Overlay */}
-                      {indicatorsMetrics && (
+                      {forecastData.length > 0 && (
                         <Area
                           type="monotone"
                           dataKey="upperConfidence"
@@ -605,14 +631,15 @@ const StockDetail = () => {
                         dot={false}
                       />
                       {/* Glowing dashed predictor */}
-                      {indicatorsMetrics && (
+                      {forecastData.length > 0 && (
                         <Line
                           type="monotone"
-                          dataKey="close"
+                          dataKey="prediction"
                           stroke="#f59e0b"
                           strokeWidth={2.5}
                           strokeDasharray="4 4"
-                          dot={{ r: 4, strokeWidth: 0, fill: "#f59e0b" }}
+                          dot={false}
+                          activeDot={{ r: 6 }}
                           name="Predicted Price"
                           connectNulls
                         />
@@ -659,22 +686,20 @@ const StockDetail = () => {
                     return (
                       <div
                         key={agent.id}
-                        className={`flex flex-col items-center text-center p-3 rounded-xl border transition-all duration-300 ${
-                          isActive
+                        className={`flex flex-col items-center text-center p-3 rounded-xl border transition-all duration-300 ${isActive
                             ? "border-learngreen-500/80 bg-learngreen-50/20 dark:bg-learngreen-950/20 shadow-md scale-105"
                             : status === "completed"
-                            ? "border-slate-200 dark:border-slate-800 bg-slate-50/40 dark:bg-slate-900/40 opacity-90"
-                            : "border-slate-100 dark:border-slate-900 bg-white dark:bg-slate-900 opacity-60"
-                        }`}
+                              ? "border-slate-200 dark:border-slate-800 bg-slate-50/40 dark:bg-slate-900/40 opacity-90"
+                              : "border-slate-100 dark:border-slate-900 bg-white dark:bg-slate-900 opacity-60"
+                          }`}
                       >
                         <div
-                          className={`p-2.5 rounded-full mb-2 ${
-                            isActive
+                          className={`p-2.5 rounded-full mb-2 ${isActive
                               ? "bg-learngreen-100 dark:bg-learngreen-950 text-learngreen-600 dark:text-learngreen-400 animate-bounce"
                               : status === "completed"
-                              ? "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400"
-                              : "bg-slate-50 dark:bg-slate-900 text-slate-400"
-                          }`}
+                                ? "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400"
+                                : "bg-slate-50 dark:bg-slate-900 text-slate-400"
+                            }`}
                         >
                           <AgentIcon size={18} />
                         </div>
@@ -713,7 +738,7 @@ const StockDetail = () => {
                     </span>
                     <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
                   </div>
-                  
+
                   <div className="font-mono text-[11px] h-44 overflow-y-auto space-y-1.5 pr-2 scrollbar-thin scrollbar-thumb-slate-800">
                     {terminalLogs.length === 0 ? (
                       <div className="text-slate-600 flex justify-center items-center h-full italic">
@@ -728,8 +753,8 @@ const StockDetail = () => {
                               log.type === "success"
                                 ? "text-green-400"
                                 : log.type === "warn"
-                                ? "text-yellow-400 font-bold"
-                                : "text-slate-300"
+                                  ? "text-yellow-400 font-bold"
+                                  : "text-slate-300"
                             }
                           >
                             {log.text}
@@ -758,13 +783,12 @@ const StockDetail = () => {
                 {recommendationMetrics ? (
                   <div className="w-full text-center">
                     <div
-                      className={`text-5xl font-black tracking-tighter mb-2 ${
-                        recommendationMetrics.signal === "BUY"
+                      className={`text-5xl font-black tracking-tighter mb-2 ${recommendationMetrics.signal === "BUY"
                           ? "text-emerald-600 dark:text-emerald-400 drop-shadow-[0_0_15px_rgba(16,185,129,0.1)]"
                           : recommendationMetrics.signal === "SELL"
-                          ? "text-red-600 dark:text-red-400 drop-shadow-[0_0_15px_rgba(239,68,68,0.1)]"
-                          : "text-amber-500 dark:text-amber-400"
-                      }`}
+                            ? "text-red-600 dark:text-red-400 drop-shadow-[0_0_15px_rgba(239,68,68,0.1)]"
+                            : "text-amber-500 dark:text-amber-400"
+                        }`}
                     >
                       {recommendationMetrics.signal}
                     </div>
@@ -779,13 +803,12 @@ const StockDetail = () => {
                     {/* Progress slider bar representation */}
                     <div className="w-full bg-slate-100 dark:bg-slate-800 h-2.5 rounded-full mt-3 overflow-hidden">
                       <div
-                        className={`h-full rounded-full transition-all duration-1000 ${
-                          recommendationMetrics.signal === "BUY"
+                        className={`h-full rounded-full transition-all duration-1000 ${recommendationMetrics.signal === "BUY"
                             ? "bg-emerald-500"
                             : recommendationMetrics.signal === "SELL"
-                            ? "bg-red-500"
-                            : "bg-amber-500"
-                        }`}
+                              ? "bg-red-500"
+                              : "bg-amber-500"
+                          }`}
                         style={{ width: `${recommendationMetrics.confidence}%` }}
                       />
                     </div>
@@ -849,13 +872,12 @@ const StockDetail = () => {
                         <div className="absolute left-[30%] top-0 bottom-0 border-l border-slate-300 dark:border-slate-700" />
                         <div className="absolute left-[70%] top-0 bottom-0 border-l border-slate-300 dark:border-slate-700" />
                         <div
-                          className={`h-full rounded-full transition-all duration-1000 ${
-                            indicatorsMetrics.rsi < 30
+                          className={`h-full rounded-full transition-all duration-1000 ${indicatorsMetrics.rsi < 30
                               ? "bg-blue-500"
                               : indicatorsMetrics.rsi > 70
-                              ? "bg-red-500"
-                              : "bg-emerald-500"
-                          }`}
+                                ? "bg-red-500"
+                                : "bg-emerald-500"
+                            }`}
                           style={{ width: `${indicatorsMetrics.rsi}%` }}
                         />
                       </div>
@@ -973,13 +995,12 @@ const StockDetail = () => {
                     <div className="flex justify-between items-center bg-slate-50 dark:bg-slate-950/60 p-3 rounded-lg border border-slate-100 dark:border-slate-900">
                       <span className="text-xs font-semibold text-slate-500">Risk Classification</span>
                       <span
-                        className={`text-sm font-extrabold px-2 py-0.5 rounded ${
-                          riskMetrics.risk_class === "Low"
+                        className={`text-sm font-extrabold px-2 py-0.5 rounded ${riskMetrics.risk_class === "Low"
                             ? "bg-green-100 dark:bg-green-950 text-green-700 dark:text-green-400"
                             : riskMetrics.risk_class === "High"
-                            ? "bg-red-100 dark:bg-red-950 text-red-700 dark:text-red-400"
-                            : "bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-400"
-                        }`}
+                              ? "bg-red-100 dark:bg-red-950 text-red-700 dark:text-red-400"
+                              : "bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-400"
+                          }`}
                       >
                         {riskMetrics.risk_class} Risk
                       </span>
