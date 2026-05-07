@@ -224,3 +224,28 @@ DEBUG: Key starts: gsk_GL... Length: 56
 DEBUG: Attempting Groq call for topic: Market News and Current Events
 DEBUG: Groq response received
 DEBUG: Generated question difficulties: {'Easy': 3, 'Medium': 3, 'Hard': 3}
+DEBUG: Key loaded: Yes
+DEBUG: Key starts: gsk_GL... Length: 56
+DEBUG: Attempting Groq call for topic: Stock Market Basics
+DEBUG: Groq response received
+DEBUG: Generated question difficulties: {'Easy': 3, 'Medium': 3, 'Hard': 3}
+DEBUG: Key loaded: Yes
+DEBUG: Key starts: gsk_GL... Length: 56
+DEBUG: Attempting Groq call for topic: Stock Market Basics
+DEBUG: Groq response received
+DEBUG: Generated question difficulties: {'Easy': 3, 'Medium': 3, 'Hard': 3}
+DEBUG: Key loaded: Yes
+DEBUG: Key starts: gsk_GL... Length: 56
+DEBUG: Attempting Groq call for topic: Technical Analysis
+DEBUG: Groq response received
+DEBUG: Generated question difficulties: {'Easy': 3, 'Medium': 3, 'Hard': 3}
+DEBUG: Key loaded: Yes
+DEBUG: Key starts: gsk_GL... Length: 56
+DEBUG: Attempting Groq call for topic: Technical Analysis
+DEBUG: Groq response received
+DEBUG: Generated question difficulties: {'Easy': 3, 'Medium': 3, 'Hard': 3}
+DEBUG: Key loaded: Yes
+DEBUG: Key starts: gsk_GL... Length: 56
+DEBUG: Attempting Groq call for topic: Market News and Current Events
+DEBUG: Groq response received
+DEBUG: Generated question difficulties: {'Easy': 3, 'Medium': 3, 'Hard': 3}

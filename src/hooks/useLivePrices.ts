@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import { fetchStockBatch, type StockQuoteResponse } from "@/services/stockApi";
+import { isNSEMarketOpen } from "@/lib/marketHours";
 
 type PriceInfo = {
   symbol: string;
@@ -92,7 +93,10 @@ export function useLivePrices(
 
   const start = useCallback(() => {
     if (timerRef.current) window.clearInterval(timerRef.current);
-    timerRef.current = window.setInterval(() => fetchPrices(), intervalMs);
+    timerRef.current = window.setInterval(() => {
+      // Only poll when market is open — prevents after-hours value fluctuations
+      if (isNSEMarketOpen()) fetchPrices();
+    }, intervalMs);
   }, [fetchPrices, intervalMs]);
 
   const stop = useCallback(() => {

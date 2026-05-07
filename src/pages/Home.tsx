@@ -9,10 +9,11 @@ import { usePortfolioStore } from "@/stores/portfolioStore";
 import { PortfolioChart } from "@/components/PortfolioChart";
 import LoginReward from "@/components/LoginReward";
 import { Stock, Portfolio } from "@/types";
-import { PieChart } from "lucide-react";
+import { PieChart, ArrowLeftRight } from "lucide-react";
 import { useRef } from "react";
 import LiveBadge from "@/components/LiveBadge";
 import { supabase } from "@/integrations/supabase/client";
+import { isNSEMarketOpen } from "@/lib/marketHours";
 import { fetchStockData } from "@/services/stockApi";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
@@ -65,6 +66,8 @@ const Home = () => {
   const [seriesData, setSeriesData] = useState<
     { date: string; value: number }[]
   >([]);
+  // Toggle for Stocks bar: show PnL vs Total Invested
+  const [showInvested, setShowInvested] = useState(false);
   // Bring back holdings list (below) and enable scroll target
   const holdingsRef = useRef<HTMLDivElement | null>(null);
   const [holdingsView, setHoldingsView] = useState<
@@ -167,6 +170,8 @@ const Home = () => {
   // Periodically snapshot portfolio value into history (every 60s)
   useEffect(() => {
     const takeSnapshot = () => {
+      // Only snapshot if market is open
+      if (!isNSEMarketOpen()) return;
       try {
         const portfolio = usePortfolioStore.getState();
         // use currently polled prices from hook and snapshot ONLY invested equity (exclude cash)
@@ -191,12 +196,41 @@ const Home = () => {
     return () => clearInterval(id);
   }, [prices]);
 
+  // Helper: format a date label depending on the selected range
+  const formatDateLabel = (dateStr: string, rangeKey: string): string => {
+    try {
+      const d = new Date(dateStr);
+      if (isNaN(d.getTime())) return dateStr; // already formatted
+      if (rangeKey === "1D") {
+        return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+      }
+      if (rangeKey === "1W") {
+        return d.toLocaleDateString("en-IN", { weekday: "short", day: "numeric" });
+      }
+      if (rangeKey === "1Y") {
+        return d.toLocaleDateString("en-IN", { month: "short", year: "2-digit" });
+      }
+      // 1M default
+      return d.toLocaleDateString("en-IN", { day: "numeric", month: "short" });
+    } catch {
+      return dateStr;
+    }
+  };
+
   // Helper: compute portfolio equity series for selected range using historical prices
   useEffect(() => {
     (async () => {
       try {
         setSeriesLoading(true);
-        const dayMap = { "1D": 2, "1W": 7, "1M": 30, "1Y": 365 } as const; // 1D uses last 2 days for a line
+
+        // For 1D, use the local snapshot history instead of API historical data
+        if (range === "1D") {
+          setSeriesData([]);
+          setSeriesLoading(false);
+          return;
+        }
+
+        const dayMap = { "1W": 7, "1M": 30, "1Y": 365 } as const;
         const days = dayMap[range];
         // Use all traded symbols AND current holdings so history is complete
         const state = usePortfolioStore.getState();
@@ -229,38 +263,31 @@ const Home = () => {
             ) {
               hist = data.historicalData.map((it: any) => ({
                 date: new Date(it.date).toISOString().slice(0, 10),
-                close: it.close as number,
+                close: Math.round((it.close as number) * 100) / 100,
               }));
             } else {
-              // FALLBACK: Generate synthetic history so the graph works
-              // Start from current known price or mock price
-              const mockPrice =
-                mockStocks.find((m) => m.symbol === sym)?.price ?? 100;
-              // Get live price if available, else mock
-              // We access prices from closure (it is in component scope)
-              let current = prices?.[sym]?.price ?? mockPrice;
-
-              const synthPoints = [];
-              const end = new Date();
-
-              for (let i = 0; i < days; i++) {
-                const d = new Date();
-                d.setDate(end.getDate() - i);
-                synthPoints.push({
-                  date: d.toISOString().slice(0, 10),
-                  close: current,
-                });
-                // Random walk backwards: previous was current / (1 + change)
-                // Change is random +/- 2%
-                const change = Math.random() * 0.04 - 0.02;
-                current = current / (1 + change);
+              // FALLBACK: Use current price as a flat line (no synthetic random walk)
+              const baseSym = baseSymbol(sym);
+              const livePrice = prices?.[baseSym]?.price;
+              const mockPrice = mockStocks.find((m) => m.symbol === sym)?.price;
+              const flatPrice = livePrice ?? mockPrice ?? 0;
+              if (flatPrice > 0) {
+                const end = new Date();
+                for (let i = days - 1; i >= 0; i--) {
+                  const d = new Date();
+                  d.setDate(end.getDate() - i);
+                  // Skip weekends for a cleaner look
+                  if (d.getDay() === 0 || d.getDay() === 6) continue;
+                  hist.push({
+                    date: d.toISOString().slice(0, 10),
+                    close: Math.round(flatPrice * 100) / 100,
+                  });
+                }
               }
-              hist = synthPoints.reverse();
             }
 
             // Ensure ascending by date
             hist.sort((a, b) => a.date.localeCompare(b.date));
-            // forward-fill close for missing days will be handled later by last-known lookup
             return { sym, hist };
           }),
         );
@@ -303,15 +330,6 @@ const Home = () => {
           tradesBySym[sym].sort((a, b) => a.date.localeCompare(b.date));
 
         // Compute equity series: for each date, sum qty(sym,<=date)*price(sym,date)
-        const currentCash = useBalanceStore.getState().balance;
-
-        // Flatten trades for chronological replay
-        const allTrades = state.trades
-          .slice()
-          .sort(
-            (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime(),
-          );
-
         const series: { date: string; value: number }[] = [];
         for (const d of dates) {
           let total = 0;
@@ -337,7 +355,8 @@ const Home = () => {
             const px = lastCloseOnOrBefore(sym, d);
             total += qty * px;
           }
-          series.push({ date: d, value: total });
+          // Round to 2 decimals to avoid floating point display artifacts
+          series.push({ date: d, value: Math.round(total * 100) / 100 });
         }
 
         setSeriesData(series);
@@ -460,21 +479,40 @@ const Home = () => {
                       </div>
                       <div className="text-right">
                         <div className="text-3xl font-extrabold">
-                          ₹{investedValue.toLocaleString()}
+                          ₹{investedValue.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </div>
-                        <div
-                          className={`text-sm font-semibold ${
-                            stocksPnL >= 0
-                              ? "text-green-600"
-                              : "text-orange-500"
-                          }`}
-                        >
-                          {stocksPnL >= 0 ? "+" : ""}₹
-                          {Math.abs(stocksPnL).toLocaleString(undefined, {
-                            minimumFractionDigits: 2,
-                            maximumFractionDigits: 2,
-                          })}{" "}
-                          ({stocksPnLPct.toFixed(2)}%)
+                        {/* Toggle between PnL and Total Invested */}
+                        <div className="flex items-center justify-end gap-1.5 mt-0.5">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setShowInvested((p) => !p);
+                            }}
+                            className="p-0.5 rounded-md hover:bg-green-200/60 transition-colors"
+                            title={showInvested ? "Show P&L" : "Show total invested"}
+                          >
+                            <ArrowLeftRight className="h-3.5 w-3.5 text-gray-600" />
+                          </button>
+                          {showInvested ? (
+                            <div className="text-sm font-semibold text-gray-700">
+                              Invested: ₹{investedCost.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </div>
+                          ) : (
+                            <div
+                              className={`text-sm font-semibold ${
+                                stocksPnL >= 0
+                                  ? "text-green-600"
+                                  : "text-orange-500"
+                              }`}
+                            >
+                              {stocksPnL >= 0 ? "+" : ""}₹
+                              {Math.abs(stocksPnL).toLocaleString("en-IN", {
+                                minimumFractionDigits: 2,
+                                maximumFractionDigits: 2,
+                              })}{" "}
+                              ({stocksPnLPct.toFixed(2)}%)
+                            </div>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -510,6 +548,22 @@ const Home = () => {
                       </div>
                     </div>
                   </div>
+
+                  {/* Ratio Progress Bar */}
+                  {total > 0 && (
+                    <div className="mt-4 w-full bg-gray-200 rounded-full h-3 flex overflow-hidden">
+                      <div 
+                        className="bg-learngreen-500 h-3" 
+                        style={{ width: `${investedPct}%` }}
+                        title={`Stocks: ${investedPct.toFixed(1)}%`}
+                      />
+                      <div 
+                        className="bg-gray-400 h-3" 
+                        style={{ width: `${cashPct}%` }}
+                        title={`Cash: ${cashPct.toFixed(1)}%`}
+                      />
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             </motion.div>
@@ -521,7 +575,7 @@ const Home = () => {
             {(() => {
               // Current invested equity value (exclude cash)
               const investedValue = holdings.reduce((s, h) => {
-                const live = prices[h.symbol];
+                const live = prices[baseSymbol(h.symbol)];
                 const currentPrice = live
                   ? live.price
                   : (mockStocks.find((m) => m.id === h.stockId)?.price ??
@@ -539,15 +593,49 @@ const Home = () => {
                 investedCost > 0 ? (investedPnL / investedCost) * 100 : 0;
 
               // Use computed seriesData for selected range; fallback to quick history if empty
-              const chartData =
-                seriesData && seriesData.length > 0
-                  ? seriesData
-                  : history && history.length > 0
-                    ? history.map((pt) => ({
-                        date: new Date(pt.date).toLocaleTimeString(),
-                        value: pt.value,
-                      }))
-                    : undefined;
+              let chartData: { date: string; value: number }[] | undefined = undefined;
+              if (range === "1D") {
+                // 1D uses local real-time snapshots
+                if (history && history.length > 0) {
+                  const todayStr = new Date().toDateString();
+                  chartData = history
+                    .filter((pt) => {
+                      const d = new Date(pt.date);
+                      // Filter points: must be today
+                      if (d.toDateString() !== todayStr) return false;
+                      
+                      // Check if it was recorded within market hours
+                      const mins = d.getHours() * 60 + d.getMinutes();
+                      const isMarketHrs = mins >= 9 * 60 + 15 && mins <= 15 * 60 + 30;
+                      return isMarketHrs;
+                    })
+                    .map((pt) => ({
+                      date: formatDateLabel(pt.date, "1D"),
+                      value: Math.round(pt.value * 100) / 100,
+                    }));
+                }
+              } else if (seriesData && seriesData.length > 0) {
+                // Historical ranges — pin last point to live value
+                const computedSeries = seriesData.map((pt) => ({
+                  date: formatDateLabel(pt.date, range),
+                  value: pt.value,
+                }));
+                // Replace / append today's point with live invested value
+                const todayLabel = formatDateLabel(new Date().toISOString().slice(0, 10), range);
+                const lastIdx = computedSeries.length - 1;
+                const roundedInvested = Math.round(investedValue * 100) / 100;
+                if (computedSeries[lastIdx]?.date === todayLabel) {
+                  computedSeries[lastIdx].value = roundedInvested;
+                } else {
+                  computedSeries.push({ date: todayLabel, value: roundedInvested });
+                }
+                chartData = computedSeries;
+              } else if (history && history.length > 0) {
+                chartData = history.map((pt) => ({
+                  date: formatDateLabel(pt.date, range),
+                  value: Math.round(pt.value * 100) / 100,
+                }));
+              }
 
               return (
                 <motion.div variants={itemVariants} className="relative">
@@ -557,9 +645,9 @@ const Home = () => {
                   <PortfolioChart
                     title="Portfolio Value"
                     description="Stocks invested value (excludes cash)"
-                    value={investedValue}
-                    change={investedPnL}
-                    changePercent={investedPnLPct}
+                    value={Math.round(investedValue * 100) / 100}
+                    change={Math.round(investedPnL * 100) / 100}
+                    changePercent={Math.round(investedPnLPct * 100) / 100}
                     data={chartData}
                     height={340}
                   />
@@ -623,7 +711,7 @@ const Home = () => {
                   )}
 
                   {holdings.map((holding) => {
-                    const live = prices[holding.symbol];
+                    const live = prices[baseSymbol(holding.symbol)];
                     const mock = mockStocks.find(
                       (m) => m.id === holding.stockId,
                     ) as Stock | undefined;
@@ -644,7 +732,7 @@ const Home = () => {
                     const totalHoldingsValue = holdings.reduce((s, h) => {
                       const m = mockStocks.find((x) => x.id === h.stockId);
                       const price =
-                        prices[h.symbol]?.price ??
+                        prices[baseSymbol(h.symbol)]?.price ??
                         (m ? m.price : h.avgBuyPrice);
                       return s + price * h.quantity;
                     }, 0);
