@@ -1,73 +1,212 @@
-# Welcome to your Lovable project
+# 📈 LearnStocks
 
-## Project info
+> A gamified stock market learning platform that teaches you how to invest — without risking real money.
 
-**URL**: https://lovable.dev/projects/e6f8367a-ada9-443b-8012-f1b2a33610ff
+![React](https://img.shields.io/badge/React-18-blue?logo=react)
+![TypeScript](https://img.shields.io/badge/TypeScript-5.5-blue?logo=typescript)
+![Vite](https://img.shields.io/badge/Vite-5.4-purple?logo=vite)
+![Supabase](https://img.shields.io/badge/Supabase-Auth%20%26%20DB-green?logo=supabase)
+![FastAPI](https://img.shields.io/badge/FastAPI-Python%20Backend-teal?logo=fastapi)
+![TailwindCSS](https://img.shields.io/badge/TailwindCSS-3.4-38bdf8?logo=tailwindcss)
 
-## How can I edit this code?
+---
 
-There are several ways of editing your application.
+## 🚀 About the Project
 
-**Use Lovable**
+**LearnStocks** is an interactive, gamified web application designed to help beginners and enthusiasts learn how the stock market works — through hands-on simulated trading, mini-games, AI-powered price predictions, and real-time sentiment analysis from live news.
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/e6f8367a-ada9-443b-8012-f1b2a33610ff) and start prompting.
+Whether you're a complete beginner or someone who wants to sharpen their trading instincts, LearnStocks makes learning finance engaging and risk-free.
 
-Changes made via Lovable will be committed automatically to this repo.
+---
 
-**Use your preferred IDE**
+## ✨ Features
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+- 🎮 **Gamified Learning** — Play stock market mini-games to learn trading concepts interactively
+- 📊 **Portfolio / Holdings Tracker** — Track your virtual stock holdings and performance
+- 🔍 **Stock Search & Detail Pages** — Search for stocks and view detailed charts and info
+- 🤖 **AI Price Predictions** — LSTM-based model predicts next closing price using historical data
+- 📰 **Sentiment Analysis** — Analyzes live news headlines using VADER to score market sentiment
+- 🏆 **Leaderboard & Profile** — Compete with others, build your profile, and track progress
+- 🔐 **Authentication** — Secure sign-up/login via Supabase Auth
+- 🌙 **Dark Mode Support** — Full theme switching with `next-themes`
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+---
 
-Follow these steps:
+## 🛠️ Tech Stack
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+### Frontend
+| Technology | Purpose |
+|---|---|
+| React 18 + TypeScript | Core UI framework |
+| Vite 5 | Lightning-fast dev server & bundler |
+| TailwindCSS 3 | Utility-first styling |
+| shadcn/ui + Radix UI | Accessible UI component library |
+| React Router DOM v6 | Client-side routing |
+| TanStack Query v5 | Server state management & caching |
+| Zustand | Lightweight global state management |
+| Recharts | Interactive stock charts |
+| React Hook Form + Zod | Form handling & validation |
+| Supabase JS | Auth, Database & Realtime |
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+### Backend (Python API)
+| Technology | Purpose |
+|---|---|
+| FastAPI | REST API framework |
+| TensorFlow / Keras | LSTM model for price prediction |
+| scikit-learn | Data preprocessing (MinMaxScaler) |
+| VADER Sentiment | News sentiment scoring |
+| NewsAPI | Real-time stock-related news |
+| NumPy | Numerical computations |
 
-# Step 3: Install the necessary dependencies.
-npm i
+---
 
-# Step 4: Start the development server with auto-reloading and an instant preview.
+## 📁 Project Structure
+
+```
+LearnStocks/
+├── src/
+│   ├── pages/          # App pages (Home, Games, Holdings, Search, Profile, etc.)
+│   ├── components/     # Reusable UI components
+│   ├── contexts/       # React context providers
+│   ├── hooks/          # Custom React hooks
+│   ├── stores/         # Zustand global stores
+│   ├── integrations/   # Supabase client & types
+│   ├── lib/            # Utility functions
+│   ├── types/          # TypeScript type definitions
+│   └── utils/          # Helper utilities
+├── python-api/
+│   ├── main.py         # FastAPI app (predictions + sentiment)
+│   ├── requirements.txt
+│   └── Procfile        # For deployment (Render)
+├── supabase/           # Supabase migrations & config
+├── public/             # Static assets
+└── .env.example        # Environment variable template
+```
+
+---
+
+## ⚙️ Getting Started
+
+### Prerequisites
+- **Node.js** >= 18
+- **Python** >= 3.10
+- A [Supabase](https://supabase.com) project
+- A [NewsAPI](https://newsapi.org) key
+
+---
+
+### 1. Clone the Repository
+
+```bash
+git clone https://github.com/vrajsutariya454-netizen/Learnstocks_T1.git
+cd Learnstocks_T1/LearnStocks
+```
+
+---
+
+### 2. Frontend Setup
+
+```bash
+# Install dependencies
+npm install
+
+# Copy environment template and fill in your values
+cp .env.example .env
+```
+
+Edit `.env`:
+```env
+VITE_SUPABASE_URL=your_supabase_project_url
+VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
+VITE_API_BASE_URL=http://localhost:8000
+```
+
+```bash
+# Start development server
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+App runs at → `http://localhost:5173`
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+---
 
-**Use GitHub Codespaces**
+### 3. Python API Setup
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+```bash
+cd python-api
 
-## What technologies are used for this project?
+# Create a virtual environment
+python -m venv venv
+venv\Scripts\activate      # Windows
+# source venv/bin/activate  # macOS/Linux
 
-This project is built with:
+# Install dependencies
+pip install -r requirements.txt
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+# Set your NewsAPI key
+set NEWS_API_KEY=your_newsapi_key   # Windows
+# export NEWS_API_KEY=your_newsapi_key  # macOS/Linux
 
-## How can I deploy this project?
+# Start the API server
+uvicorn main:app --reload
+```
 
-Simply open [Lovable](https://lovable.dev/projects/e6f8367a-ada9-443b-8012-f1b2a33610ff) and click on Share -> Publish.
+API runs at → `http://localhost:8000`
 
-## Can I connect a custom domain to my Lovable project?
+---
 
-Yes it is!
+## 🔌 API Endpoints
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/health` | Health check |
+| `POST` | `/predict` | Predict next closing price (LSTM) |
+| `GET` | `/sentiment/{symbol}` | News sentiment for a stock symbol |
 
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/tips-tricks/custom-domain#step-by-step-guide)
+### `/predict` Request Body
+```json
+{
+  "symbol": "AAPL",
+  "days": 90,
+  "closePrices": [150.0, 152.3, 148.9, ...]
+}
+```
+
+---
+
+## 🚢 Deployment
+
+| Service | Purpose |
+|---|---|
+| [Vercel](https://vercel.com) | Frontend hosting (`vercel.json` included) |
+| [Render](https://render.com) | Python API hosting (`render.yaml` + `Procfile` included) |
+| [Supabase](https://supabase.com) | Database + Auth backend |
+
+---
+
+## 🤝 Contributing
+
+Contributions, issues, and feature requests are welcome!
+
+1. Fork the repository
+2. Create your feature branch: `git checkout -b feature/amazing-feature`
+3. Commit your changes: `git commit -m 'Add amazing feature'`
+4. Push to the branch: `git push origin feature/amazing-feature`
+5. Open a Pull Request
+
+---
+
+## 📄 License
+
+This project is open source and available under the [MIT License](LICENSE).
+
+---
+
+## 👨‍💻 Author
+
+**Vraj Sutariya**  
+GitHub: [@vrajsutariya454-netizen](https://github.com/vrajsutariya454-netizen)
+
+---
+
+> *"The stock market is filled with individuals who know the price of everything, but the value of nothing." — Philip Fisher*
