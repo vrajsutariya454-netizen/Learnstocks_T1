@@ -104,32 +104,6 @@ cd Learnstocks_T1/LearnStocks
 
 ---
 
-### 2. Frontend Setup
-
-```bash
-# Install dependencies
-npm install
-
-# Copy environment template and fill in your values
-cp .env.example .env
-```
-
-Edit `.env`:
-```env
-VITE_SUPABASE_URL=your_supabase_project_url
-VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
-VITE_API_BASE_URL=http://localhost:8000
-```
-
-```bash
-# Start development server
-npm run dev
-```
-
-App runs at → `http://localhost:5173`
-
----
-
 ### 3. Python API Setup
 
 ```bash
